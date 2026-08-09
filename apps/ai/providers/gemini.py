@@ -1,4 +1,4 @@
-"""Claude (Anthropic) AI provider."""
+"""Gemini AI provider."""
 
 from __future__ import annotations
 
@@ -13,27 +13,36 @@ from apps.ai.providers.json_utils import extract_json_object
 logger = logging.getLogger(__name__)
 
 
-class ClaudeProvider(AIProvider):
+class GeminiProvider(AIProvider):
     def __init__(self, *, api_key: str | None = None, model: str | None = None) -> None:
-        import anthropic
+        import google.generativeai as genai
 
-        self._client = anthropic.Anthropic(api_key=api_key or settings.CLAUDE_API_KEY)
-        self._model = model or settings.CLAUDE_MODEL
+        key = api_key or settings.GEMINI_API_KEY
+        genai.configure(api_key=key)
+        self._model_name = model or settings.GEMINI_MODEL
+        self._model = genai.GenerativeModel(self._model_name)
 
     def _complete(self, *, system: str, user: str) -> dict[str, Any]:
-        message = self._client.messages.create(
-            model=self._model,
-            max_tokens=4096,
-            system=system,
-            messages=[{"role": "user", "content": user}],
+        prompt = f"{system}\n\n{user}"
+        response = self._model.generate_content(
+            prompt,
+            generation_config={
+                "temperature": 0.3,
+                "max_output_tokens": 4096,
+                "response_mime_type": "application/json",
+            },
         )
-        parts: list[str] = []
-        for block in message.content:
-            text = getattr(block, "text", None)
-            if text:
-                parts.append(text)
-        raw = "\n".join(parts).strip()
-        logger.info("Claude completion received (%s chars)", len(raw))
+        raw = (getattr(response, "text", None) or "").strip()
+        if not raw and getattr(response, "candidates", None):
+            parts = []
+            for cand in response.candidates:
+                content = getattr(cand, "content", None)
+                for part in getattr(content, "parts", []) or []:
+                    text = getattr(part, "text", None)
+                    if text:
+                        parts.append(text)
+            raw = "\n".join(parts).strip()
+        logger.info("Gemini completion received (%s chars)", len(raw))
         return extract_json_object(raw)
 
     def _json_call(self, *, role: str, prompt: str) -> dict[str, Any]:

@@ -174,11 +174,20 @@ def reset_password(*, token: str, password: str) -> User:
 @transaction.atomic
 def update_profile(user: User, data: dict) -> Profile:
     profile, _ = Profile.objects.get_or_create(user=user)
-    for field in ("current_role", "years_of_experience", "technical_goal", "target_role"):
+    for field in (
+        "current_role",
+        "years_of_experience",
+        "technical_goal",
+        "target_role",
+        "target_role_label",
+        "known_skills",
+        "target_learn_skills",
+    ):
         if field in data:
             setattr(profile, field, data[field])
     if data.get("complete_onboarding") is True:
-        if not profile.current_role or not profile.technical_goal or profile.target_role_id is None:
+        has_target = bool(profile.target_role_label) or profile.target_role_id is not None
+        if not profile.current_role or not profile.technical_goal or not has_target:
             raise ValidationError(
                 "Complete current role, goal, and target role before finishing onboarding."
             )

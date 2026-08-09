@@ -137,7 +137,15 @@ def submit_challenge(
 
     from apps.debriefs.services import start_debrief_for_attempt
 
-    transaction.on_commit(lambda: start_debrief_for_attempt(attempt_id=attempt.id))
+    debrief_session = start_debrief_for_attempt(attempt_id=attempt.id)
+
+    from apps.challenges.tasks import evaluate_challenge_submission
+
+    attempt_id = attempt.id
+    transaction.on_commit(lambda: evaluate_challenge_submission.delay(attempt_id))
+
+    # Attach for serializer consumers
+    attempt._debrief_session_id = debrief_session.id  # type: ignore[attr-defined]
     return attempt
 
 

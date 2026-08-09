@@ -40,3 +40,25 @@ class RoleSkill(models.Model):
 
     def __str__(self) -> str:
         return f"{self.role.slug}:{self.skill.slug}"
+
+
+class SkillTransfer(models.Model):
+    from_skill = models.ForeignKey(
+        Skill,
+        on_delete=models.CASCADE,
+        related_name="transfers_from",
+    )
+    to_skill = models.ForeignKey(
+        Skill,
+        on_delete=models.CASCADE,
+        related_name="transfers_to",
+    )
+    note = models.TextField(blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("from_skill", "to_skill")
+        ordering = ["from_skill_id", "to_skill_id"]
+
+    def __str__(self) -> str:
+        return f"Transfer<{self.from_skill.slug}->{self.to_skill.slug}>"

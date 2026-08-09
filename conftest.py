@@ -5,6 +5,7 @@ import pytest
 def _celery_eager(settings):
     settings.CELERY_TASK_ALWAYS_EAGER = True
     settings.CELERY_TASK_EAGER_PROPAGATES = True
+    settings.AI_PROVIDER = "mock"
 
 
 @pytest.fixture(autouse=True)
@@ -20,5 +21,8 @@ def _relax_throttles(settings):
             "resend_verification": "1000/min",
             "anon": "1000/min",
             "user": "1000/min",
+            "ai": "1000/min",
+            "forgot_password": "1000/min",
+            "reset_password": "1000/min",
         },
     }

@@ -93,6 +93,16 @@ class ProfileSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    known_skills = serializers.ListField(
+        child=serializers.CharField(max_length=128),
+        required=False,
+        allow_empty=True,
+    )
+    target_learn_skills = serializers.ListField(
+        child=serializers.CharField(max_length=128),
+        required=False,
+        allow_empty=True,
+    )
     complete_onboarding = serializers.BooleanField(write_only=True, required=False)
 
     class Meta:
@@ -103,6 +113,9 @@ class ProfileSerializer(serializers.ModelSerializer):
             "technical_goal",
             "target_role",
             "target_role_id",
+            "target_role_label",
+            "known_skills",
+            "target_learn_skills",
             "onboarding_completed",
             "complete_onboarding",
             "created_at",

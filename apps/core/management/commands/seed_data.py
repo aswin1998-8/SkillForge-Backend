@@ -216,6 +216,12 @@ class Command(BaseCommand):
                 skill=ai_skill_objs[spec["skill"]],
             )
 
+        from apps.diagnostics.domain_defaults import ensure_default_domain_taxonomies
+
+        created_domains = ensure_default_domain_taxonomies()
+        if created_domains:
+            self.stdout.write(f"Created {created_domains} default DomainTaxonomy row(s).")
+
         self.stdout.write(self.style.SUCCESS("Seed data created/updated successfully."))
 
     def _upsert_role(self, *, name: str, slug: str, description: str) -> Role:

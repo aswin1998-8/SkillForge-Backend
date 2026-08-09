@@ -33,19 +33,9 @@ def get_diagnostic_or_404(diagnostic_id: int) -> Diagnostic:
 
 @transaction.atomic
 def start_attempt(*, user: User, diagnostic_id: int) -> DiagnosticAttempt:
-    diagnostic = get_diagnostic_or_404(diagnostic_id)
-    existing = (
-        DiagnosticAttempt.objects.filter(
-            user=user,
-            diagnostic=diagnostic,
-            status=DiagnosticAttempt.Status.IN_PROGRESS,
-        )
-        .order_by("-started_at")
-        .first()
-    )
-    if existing:
-        return existing
-    return DiagnosticAttempt.objects.create(user=user, diagnostic=diagnostic)
+    from apps.diagnostics.adaptive import start_adaptive_attempt
+
+    return start_adaptive_attempt(user=user, diagnostic_id=diagnostic_id)
 
 
 @transaction.atomic
@@ -107,6 +97,7 @@ def _get_user_attempt(user: User, attempt_id: int) -> DiagnosticAttempt:
         return DiagnosticAttempt.objects.select_related("diagnostic", "result").prefetch_related(
             "answers__question",
             "diagnostic__questions",
+            "turns__skill",
         ).get(pk=attempt_id, user=user)
     except DiagnosticAttempt.DoesNotExist as exc:
         raise NotFound("Diagnostic attempt not found.") from exc

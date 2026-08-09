@@ -96,6 +96,10 @@ class Profile(models.Model):
         on_delete=models.SET_NULL,
         related_name="profiles",
     )
+    target_role_label = models.CharField(max_length=255, blank=True, default="")
+    known_skills = models.JSONField(default=list, blank=True)
+    # Languages/frameworks the user wants to learn for the target role (Step 03).
+    target_learn_skills = models.JSONField(default=list, blank=True)
     onboarding_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

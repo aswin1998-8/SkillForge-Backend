@@ -8,6 +8,12 @@ from celery import shared_task
 from django.db import transaction
 
 from apps.ai.services.diagnostic_service import run_diagnostic_analysis
+from apps.diagnostics.block_assessment import (
+    classify_block_b_exposure,
+    generate_block_b_for_session,
+    generate_stage_for_session,
+    run_synthesis,
+)
 from apps.diagnostics.models import DiagnosticAttempt, DiagnosticResult
 from apps.diagnostics.services import mark_attempt_completed, mark_attempt_failed
 from apps.gaps.models import UserSkillGap
@@ -81,7 +87,8 @@ def generate_diagnostic_result(attempt_id: int) -> dict:
                     status=UserSkillGap.Status.NOT_STARTED,
                     evidence_source_type="diagnostic",
                     evidence_source_id=str(attempt.id),
-                    evidence_summary=gap.notes or f"Identified via diagnostic {attempt.diagnostic.title}",
+                    evidence_summary=gap.notes
+                    or f"Identified via diagnostic {attempt.diagnostic.title}",
                 )
 
             mark_attempt_completed(attempt)
@@ -98,3 +105,75 @@ def generate_diagnostic_result(attempt_id: int) -> dict:
         logger.exception("Failed generating diagnostic result for attempt %s", attempt_id)
         mark_attempt_failed(attempt)
         return {"ok": False, "attempt_id": attempt_id}
+
+
+@shared_task(
+    bind=True,
+    name="apps.diagnostics.tasks.generate_session_stage",
+    max_retries=2,
+    default_retry_delay=15,
+)
+def generate_session_stage(self, session_id: int, block: str, stage: str) -> dict:
+    try:
+        generate_stage_for_session(session_id=session_id, block=block, stage=stage)
+        return {"ok": True, "session_id": session_id, "block": block, "stage": stage}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate_session_stage failed session=%s", session_id)
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
+
+
+@shared_task(
+    bind=True,
+    name="apps.diagnostics.tasks.generate_block_b_questions",
+    max_retries=2,
+    default_retry_delay=15,
+)
+def generate_block_b_questions(self, session_id: int) -> dict:
+    try:
+        generate_block_b_for_session(session_id=session_id)
+        return {"ok": True, "session_id": session_id, "block": "B"}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("generate_block_b_questions failed session=%s", session_id)
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
+
+
+@shared_task(
+    bind=True,
+    name="apps.diagnostics.tasks.classify_block_b_exposure",
+    max_retries=2,
+    default_retry_delay=15,
+)
+def classify_block_b_exposure_task(self, session_id: int) -> dict:
+    try:
+        classify_block_b_exposure(session_id=session_id)
+        return {"ok": True, "session_id": session_id}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("classify_block_b_exposure failed session=%s", session_id)
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
+
+
+@shared_task(
+    bind=True,
+    name="apps.diagnostics.tasks.synthesize_session",
+    max_retries=2,
+    default_retry_delay=20,
+)
+def synthesize_session(self, session_id: int) -> dict:
+    try:
+        run_synthesis(session_id=session_id)
+        return {"ok": True, "session_id": session_id}
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("synthesize_session failed session=%s", session_id)
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {"ok": False, "session_id": session_id, "error": str(exc)}
