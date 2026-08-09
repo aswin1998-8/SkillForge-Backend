@@ -1,0 +1,61 @@
+# Render Blueprint — Web service for SkillForge API
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: skillforge-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # Creates DB tables (users_user, etc.) before traffic hits the app
+    preDeployCommand: python manage.py migrate --noinput
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skillforge-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: skillforge-redis
+          type: keyvalue
+          property: connectionString
+      # Set the rest in the Render dashboard (SECRET_KEY, GOOGLE_CLIENT_ID, etc.)
+
+  - type: worker
+    name: skillforge-celery
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A config worker -l info
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: skillforge-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: skillforge-redis
+          type: keyvalue
+          property: connectionString
+
+  - type: keyvalue
+    name: skillforge-redis
+    plan: free
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: skillforge-db
+    plan: free
