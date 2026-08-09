@@ -1,14 +1,14 @@
 # Render Blueprint — Web service for SkillForge API
 # Docs: https://render.com/docs/blueprint-spec
+#
+# Free plan: Pre-Deploy Command is paid-only. Run migrate in startCommand instead.
 services:
   - type: web
     name: skillforge-api
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    # Creates DB tables (users_user, etc.) before traffic hits the app
-    preDeployCommand: python manage.py migrate --noinput
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.8"
