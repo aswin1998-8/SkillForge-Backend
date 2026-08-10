@@ -6,7 +6,13 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
-from apps.challenges.models import Challenge, ChallengeSkill
+from apps.challenges.seed_challenges import (
+    deactivate_orphan_challenges,
+    seed_sample_challenges,
+)
+from apps.diagnostics.quick_score import ensure_default_quick_score_content
+from apps.diagnostics.roadmap_rebuild import wipe_and_rebuild_all_users
+from apps.diagnostics.synthesis_engine import ensure_default_report_content
 from apps.diagnostics.topic_defaults import ensure_default_topics
 from apps.roles.models import Role, RoleSkill, Skill
 
@@ -18,6 +24,7 @@ SOFTWARE_SKILLS = [
     ("FastAPI", "fastapi", "Async APIs, validation, and dependencies."),
     ("TypeScript", "typescript", "Strong typing for frontend applications."),
     ("Python", "python", "Core Python for backend engineering."),
+    ("PostgreSQL", "postgresql", "SQL, indexing, and query performance."),
 ]
 
 
@@ -48,7 +55,7 @@ class Command(BaseCommand):
                 skill=skill_objs[slug],
                 defaults={"importance": 5},
             )
-        for slug in ("django", "fastapi", "python"):
+        for slug in ("django", "fastapi", "python", "postgresql"):
             RoleSkill.objects.update_or_create(
                 role=backend,
                 skill=skill_objs[slug],
@@ -56,48 +63,21 @@ class Command(BaseCommand):
             )
 
         ensure_default_topics()
+        ensure_default_quick_score_content(force=True)
+        ensure_default_report_content()
         call_command("import_questions", file="content/sample_questions.json")
 
-        challenges_spec = [
-            {
-                "title": "Explain React Reconciliation",
-                "slug": "explain-react-reconciliation",
-                "modality": Challenge.Modality.THEORY,
-                "difficulty": 1,
-                "skill": "react",
-                "scenario": "A junior asks why React needs keys in lists.",
-                "requirements": ["Explain reconciliation", "Explain key purpose"],
-            },
-            {
-                "title": "Implement Pagination Helper",
-                "slug": "implement-pagination-helper",
-                "modality": Challenge.Modality.CODING,
-                "difficulty": 2,
-                "skill": "django",
-                "scenario": "Write a helper to paginate queryset results.",
-                "requirements": ["Accept page + page_size", "Return slice metadata"],
-            },
-        ]
-        for spec in challenges_spec:
-            challenge, _ = Challenge.objects.update_or_create(
-                slug=spec["slug"],
-                defaults={
-                    "title": spec["title"],
-                    "description": spec["scenario"],
-                    "modality": spec["modality"],
-                    "difficulty": spec["difficulty"],
-                    "scenario": spec["scenario"],
-                    "requirements": spec["requirements"],
-                    "is_active": True,
-                },
+        count = seed_sample_challenges(skill_objs=skill_objs)
+        orphans = deactivate_orphan_challenges()
+        rebuild_results = wipe_and_rebuild_all_users()
+        rebuilt = sum(r["rebuilt"] for r in rebuild_results)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Seed data loaded ({count} challenges; "
+                f"{orphans} orphans deactivated; "
+                f"{rebuilt} roadmap items rebuilt)."
             )
-            ChallengeSkill.objects.update_or_create(
-                challenge=challenge,
-                skill=skill_objs[spec["skill"]],
-            )
-
-        self.stdout.write(self.style.SUCCESS("Seed data loaded."))
-
+        )
     def _upsert_role(self, *, name: str, slug: str, description: str) -> Role:
         role, _ = Role.objects.update_or_create(
             slug=slug,

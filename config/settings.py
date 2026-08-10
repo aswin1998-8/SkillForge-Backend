@@ -25,6 +25,11 @@ def _split_env(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
 
 
+def _origin_list(name: str, default: str = "") -> list[str]:
+    """Normalize origins — browsers send Origin without a trailing slash."""
+    return [origin.rstrip("/") for origin in _split_env(name, default)]
+
+
 SECRET_KEY = _require_env("SECRET_KEY")
 DEBUG = os.getenv("DEBUG", "False").lower() in {"1", "true", "yes"}
 ALLOWED_HOSTS = _split_env("ALLOWED_HOSTS", "localhost,127.0.0.1")
@@ -106,9 +111,11 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOWED_ORIGINS = _split_env("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
+CORS_ALLOWED_ORIGINS = _origin_list("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = _split_env("CSRF_TRUSTED_ORIGINS", "http://localhost:3000")
+# Optional: comma-separated regexes, e.g. ^https://.*\.vercel\.app$
+CORS_ALLOWED_ORIGIN_REGEXES = _split_env("CORS_ALLOWED_ORIGIN_REGEXES", "")
+CSRF_TRUSTED_ORIGINS = _origin_list("CSRF_TRUSTED_ORIGINS", "http://localhost:3000")
 
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "False").lower() in {"1", "true", "yes"}
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")
@@ -126,6 +133,11 @@ CODE_EXECUTION_ENABLED = os.getenv("CODE_EXECUTION_ENABLED", "True").lower() in 
     "yes",
 }
 CODE_EXECUTION_TIMEOUT_SECONDS = float(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "5"))
+ALLOW_STAFF_PROGRESS_RESET = os.getenv("ALLOW_STAFF_PROGRESS_RESET", "False").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 

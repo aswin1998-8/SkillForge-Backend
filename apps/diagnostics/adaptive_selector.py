@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import random
+import re
+from typing import Iterable
 
 from django.conf import settings
 from django.db import models
@@ -10,9 +14,9 @@ from django.db import models
 from apps.diagnostics.grading import answer_score_for_adaptive
 from apps.diagnostics.models import (
     DiagnosticSession,
-    FrameworkTopic,
-    FundamentalsTopic,
     Question,
+    QuickScoreAttempt,
+    QuickScoreQuestion,
     SessionAnswer,
     SessionQuestion,
 )
@@ -36,10 +40,10 @@ STAGE_ORDER = [
 ]
 
 QUESTIONS_PER_STAGE = {
-    DiagnosticSession.Stage.FOUNDATIONAL: 4,
-    DiagnosticSession.Stage.SCENARIO: 3,
+    DiagnosticSession.Stage.FOUNDATIONAL: 5,
+    DiagnosticSession.Stage.SCENARIO: 4,
     DiagnosticSession.Stage.DEBUGGING: 3,
-    DiagnosticSession.Stage.CODING: 1,
+    DiagnosticSession.Stage.CODING: 2,
     DiagnosticSession.Stage.FIND_ISSUES: 1,
 }
 
@@ -54,6 +58,34 @@ def _strong_threshold() -> float:
 
 def _rolling_window() -> int:
     return int(getattr(settings, "ADAPTIVE_ROLLING_WINDOW", 5))
+
+
+def experience_difficulty_band(years: int | None) -> tuple[int, int, int]:
+    """Return (min_tier, max_tier, start_tier) from years of experience."""
+    if years is None:
+        return 1, 3, 1
+    if years <= 2:
+        return 1, 2, 1
+    if years <= 5:
+        return 2, 3, 2
+    return 3, 5, 3
+
+
+def _user_years(user) -> int | None:
+    profile = getattr(user, "profile", None)
+    years = getattr(profile, "years_of_experience", None)
+    if years is None:
+        return None
+    try:
+        return int(years)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rng(*parts: object) -> random.Random:
+    material = "|".join(str(p) for p in parts)
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    return random.Random(int(digest[:16], 16))
 
 
 def build_assessment_competencies(session: DiagnosticSession) -> list[dict]:
@@ -83,7 +115,15 @@ def build_assessment_competencies(session: DiagnosticSession) -> list[dict]:
                 )
 
     max_areas = int(getattr(settings, "DIAGNOSTIC_MAX_COMPETENCY_AREAS", 8))
-    return competencies[:max_areas]
+    rng = _rng(session.user_id, session.id, "competencies")
+    framework_comps = [c for c in competencies if c.get("source") == "framework"]
+    other_comps = [c for c in competencies if c.get("source") != "framework"]
+    rng.shuffle(framework_comps)
+    rng.shuffle(other_comps)
+    # Keep selected-framework areas first so sparse catalogs (e.g. sample
+    # foundational prompts only for hooks/closures) are not truncated away.
+    ordered = framework_comps + other_comps
+    return ordered[:max_areas]
 
 
 def rolling_score_for_area(
@@ -114,6 +154,79 @@ def _used_question_ids(session: DiagnosticSession) -> set[int]:
     return set(session.questions.values_list("content_question_id", flat=True))
 
 
+def _user_seen_diagnostic_question_ids(user_id: int) -> set[int]:
+    """Never re-ask a diagnostic question this user has already been shown."""
+    return set(
+        SessionQuestion.objects.filter(session__user_id=user_id).values_list(
+            "content_question_id", flat=True
+        )
+    )
+
+
+def _user_seen_diagnostic_texts(user_id: int) -> list[str]:
+    return list(
+        SessionQuestion.objects.filter(session__user_id=user_id)
+        .exclude(content_question__isnull=True)
+        .values_list("content_question__question_text", flat=True)
+    )
+
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _normalize_question_text(text: str) -> str:
+    return " ".join(_TOKEN_RE.findall((text or "").lower()))
+
+
+def _token_set(text: str) -> set[str]:
+    return set(_TOKEN_RE.findall((text or "").lower()))
+
+
+def _texts_overlap(a: str, b: str, *, min_jaccard: float = 0.55) -> bool:
+    """True when prompts are duplicates / near-duplicates of each other."""
+    na = _normalize_question_text(a)
+    nb = _normalize_question_text(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    if na in nb or nb in na:
+        return True
+    ta, tb = _token_set(a), _token_set(b)
+    if not ta or not tb:
+        return False
+    intersection = len(ta & tb)
+    union = len(ta | tb)
+    return (intersection / union) >= min_jaccard
+
+
+def _blocked_quick_score_texts_for_user(user_id: int) -> list[str]:
+    """Prompts this learner already saw in Quick Score."""
+    blocked: list[str] = []
+    attempts = QuickScoreAttempt.objects.filter(user_id=user_id).only("answers")
+    answered_ids: set[int] = set()
+    for attempt in attempts:
+        for qid in (attempt.answers or {}).keys():
+            try:
+                answered_ids.add(int(qid))
+            except (TypeError, ValueError):
+                continue
+    if answered_ids:
+        blocked.extend(
+            QuickScoreQuestion.objects.filter(id__in=answered_ids).values_list(
+                "question_text", flat=True
+            )
+        )
+    return blocked
+
+
+def _is_blocked_by_texts(question: Question, blocked_texts: Iterable[str]) -> bool:
+    for blocked in blocked_texts:
+        if _texts_overlap(question.question_text, blocked):
+            return True
+    return False
+
+
 def _candidate_questions(
     session: DiagnosticSession,
     *,
@@ -128,6 +241,11 @@ def _candidate_questions(
         session.selected_frameworks.values_list("fundamentals_topic_id", flat=True)
     )
     used = _used_question_ids(session)
+    seen_forever = _user_seen_diagnostic_question_ids(session.user_id)
+    blocked_texts = (
+        _blocked_quick_score_texts_for_user(session.user_id)
+        + _user_seen_diagnostic_texts(session.user_id)
+    )
 
     qs = Question.objects.filter(
         is_active=True,
@@ -142,7 +260,24 @@ def _candidate_questions(
     if min_difficulty is not None:
         qs = qs.filter(difficulty_tier__gte=min_difficulty)
 
-    return [q for q in qs.order_by("difficulty_tier", "id") if q.id not in used]
+    candidates = [
+        q
+        for q in qs.order_by("difficulty_tier", "id")
+        if q.id not in used
+        and q.id not in seen_forever
+        and not _is_blocked_by_texts(q, blocked_texts)
+    ]
+    rng = _rng(
+        session.user_id,
+        session.id,
+        stage,
+        competency_area,
+        min_difficulty,
+        max_difficulty,
+        len(used),
+    )
+    rng.shuffle(candidates)
+    return candidates
 
 
 def select_next_question(
@@ -151,26 +286,29 @@ def select_next_question(
     stage: str,
     competency_area: str,
     current_tier: int = 1,
+    min_tier: int = 1,
+    max_tier: int = 5,
 ) -> tuple[Question | None, dict]:
     score = rolling_score_for_area(session, competency_area)
     weak = _weak_threshold()
     strong = _strong_threshold()
 
     reason = "default_same_tier"
-    target_tier = current_tier
+    target_tier = max(min_tier, min(current_tier, max_tier))
 
     if score is not None and score < weak:
         reason = "weak_stay_area_lower_tier"
-        target_tier = current_tier
+        target_tier = max(min_tier, min(current_tier, max_tier))
         candidates = _candidate_questions(
             session,
             stage=stage,
             competency_area=competency_area,
-            max_difficulty=current_tier,
+            min_difficulty=min_tier,
+            max_difficulty=target_tier,
         )
     elif score is not None and score > strong:
         reason = "strong_escalate_tier"
-        target_tier = min(current_tier + 1, 5)
+        target_tier = min(current_tier + 1, max_tier)
         candidates = _candidate_questions(
             session,
             stage=stage,
@@ -183,6 +321,7 @@ def select_next_question(
                 session,
                 stage=stage,
                 competency_area=competency_area,
+                min_difficulty=min_tier,
                 max_difficulty=target_tier,
             )
     else:
@@ -190,10 +329,13 @@ def select_next_question(
             session,
             stage=stage,
             competency_area=competency_area,
-            max_difficulty=current_tier,
+            min_difficulty=min_tier,
+            max_difficulty=target_tier,
         )
 
     if not candidates:
+        # Relax difficulty band but still never re-ask seen questions.
+        reason = "relax_difficulty_keep_unseen"
         candidates = _candidate_questions(
             session,
             stage=stage,
@@ -207,6 +349,8 @@ def select_next_question(
         "weak_threshold": weak,
         "strong_threshold": strong,
         "target_tier": target_tier,
+        "min_tier": min_tier,
+        "max_tier": max_tier,
         "reason": reason,
         "question_id": candidates[0].id if candidates else None,
     }
@@ -219,34 +363,49 @@ def allocate_stage_questions(session: DiagnosticSession, stage: str) -> list[Ses
     if not competencies:
         return []
 
+    years = _user_years(session.user)
+    min_tier, max_tier, start_tier = experience_difficulty_band(years)
+    bump = int(getattr(session, "difficulty_bump", 0) or 0)
+    min_tier = min(5, min_tier + bump)
+    max_tier = min(5, max_tier + bump)
+    start_tier = min(5, start_tier + bump)
+
     created: list[SessionQuestion] = []
     competency_index = 0
-    current_tier = 1
+    current_tier = start_tier
     order = (
         session.questions.filter(stage=stage).order_by("-order").values_list("order", flat=True).first()
         or 0
     )
 
     for _ in range(count):
-        comp = competencies[competency_index % len(competencies)]
-        competency_area = comp["competency_area"]
-        question, decision = select_next_question(
-            session,
-            stage=stage,
-            competency_area=competency_area,
-            current_tier=current_tier,
-        )
-        session.selection_log.append(decision)
+        question = None
+        decision: dict = {}
+        tried = 0
+        while tried < len(competencies):
+            comp = competencies[competency_index % len(competencies)]
+            competency_area = comp["competency_area"]
+            question, decision = select_next_question(
+                session,
+                stage=stage,
+                competency_area=competency_area,
+                current_tier=current_tier,
+                min_tier=min_tier,
+                max_tier=max_tier,
+            )
+            session.selection_log.append(decision)
+            if question is not None:
+                break
+            competency_index += 1
+            tried += 1
 
         if question is None:
             logger.warning(
-                "No question available for session=%s stage=%s area=%s",
+                "No unseen question available for session=%s stage=%s",
                 session.id,
                 stage,
-                competency_area,
             )
-            competency_index += 1
-            continue
+            break
 
         order += 1
         sq = SessionQuestion.objects.create(
@@ -254,18 +413,14 @@ def allocate_stage_questions(session: DiagnosticSession, stage: str) -> list[Ses
             content_question=question,
             stage=stage,
             order=order,
-            competency_area=competency_area,
+            competency_area=question.competency_area,
             status=SessionQuestion.Status.ASKED,
         )
         created.append(sq)
 
         if decision.get("reason") == "strong_escalate_tier":
-            current_tier = min(current_tier + 1, 5)
-            competency_index += 1
-        elif decision.get("reason") == "weak_stay_area_lower_tier":
-            pass
-        else:
-            competency_index += 1
+            current_tier = min(current_tier + 1, max_tier)
+        competency_index += 1
 
     session.save(update_fields=["selection_log"])
     return created

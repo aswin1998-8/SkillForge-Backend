@@ -7,11 +7,17 @@ from apps.diagnostics.models import (
     DiagnosticSession,
     FrameworkTopic,
     FundamentalsTopic,
+    MarketEvidence,
     Question,
     QuestionChoice,
+    QuickScoreAttempt,
+    QuickScoreChoice,
+    QuickScoreParagraph,
+    QuickScoreQuestion,
     ReferenceAnswer,
     SessionAnswer,
     SessionQuestion,
+    SkillAreaFragment,
 )
 
 
@@ -135,5 +141,49 @@ class SessionAnswerAdmin(admin.ModelAdmin):
 
 @admin.register(DiagnosticRoadmapItem)
 class DiagnosticRoadmapItemAdmin(admin.ModelAdmin):
-    list_display = ("id", "user", "session", "priority", "topic", "challenge_modality")
-    list_filter = ("challenge_modality",)
+    list_display = (
+        "id",
+        "user",
+        "session",
+        "priority",
+        "topic",
+        "challenge_modality",
+        "status",
+    )
+    list_filter = ("challenge_modality", "status")
+
+
+class QuickScoreChoiceInline(admin.TabularInline):
+    model = QuickScoreChoice
+    extra = 2
+
+
+@admin.register(QuickScoreQuestion)
+class QuickScoreQuestionAdmin(admin.ModelAdmin):
+    list_display = ("id", "track", "competency_area", "order", "is_active")
+    list_filter = ("track", "is_active")
+    inlines = [QuickScoreChoiceInline]
+
+
+@admin.register(QuickScoreParagraph)
+class QuickScoreParagraphAdmin(admin.ModelAdmin):
+    list_display = ("track", "band")
+    list_filter = ("track", "band")
+
+
+@admin.register(QuickScoreAttempt)
+class QuickScoreAttemptAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "track", "total_score", "band", "created_at")
+    list_filter = ("track", "band")
+
+
+@admin.register(SkillAreaFragment)
+class SkillAreaFragmentAdmin(admin.ModelAdmin):
+    list_display = ("competency_area", "level")
+    list_filter = ("level",)
+
+
+@admin.register(MarketEvidence)
+class MarketEvidenceAdmin(admin.ModelAdmin):
+    list_display = ("competency_area", "source_name", "source_date", "is_active")
+    list_filter = ("is_active",)

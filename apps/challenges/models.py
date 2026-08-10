@@ -15,6 +15,7 @@ class Challenge(models.Model):
         DIAGNOSE = "DIAGNOSE", "Diagnose"
         ARCHITECT = "ARCHITECT", "Architect"
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
+        USE_AI = "USE_AI", "Use AI without skill atrophy"
         COMMUNICATE = "COMMUNICATE", "Communicate"
 
     title = models.CharField(max_length=255)
@@ -27,6 +28,8 @@ class Challenge(models.Model):
     requirements = models.JSONField(default=list, blank=True)
     constraints = models.JSONField(default=list, blank=True)
     workspace_config = models.JSONField(default=dict, blank=True)
+    # frontend_mastery | backend_mastery | fe_to_be | be_to_fe
+    directions = models.JSONField(default=list, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -55,6 +58,52 @@ class ChallengeSkill(models.Model):
 
     def __str__(self) -> str:
         return f"{self.challenge.slug}:{self.skill.slug}"
+
+
+class ChallengeModelAnswer(models.Model):
+    challenge = models.OneToOneField(
+        Challenge,
+        on_delete=models.CASCADE,
+        related_name="model_answer",
+    )
+    reference_text = models.TextField()
+
+    def __str__(self) -> str:
+        return f"ModelAnswer<{self.challenge_id}>"
+
+
+class ChallengeRubricItem(models.Model):
+    challenge = models.ForeignKey(
+        Challenge,
+        on_delete=models.CASCADE,
+        related_name="rubric_items",
+    )
+    text = models.TextField()
+    order = models.PositiveSmallIntegerField(default=1)
+    strength_fragment = models.TextField(blank=True, default="")
+    gap_fragment = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"Rubric<{self.challenge_id}:{self.order}>"
+
+
+class ChallengeFollowUp(models.Model):
+    rubric_item = models.ForeignKey(
+        ChallengeRubricItem,
+        on_delete=models.CASCADE,
+        related_name="follow_ups",
+    )
+    question_text = models.TextField()
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ["order", "id"]
+
+    def __str__(self) -> str:
+        return f"FollowUp<{self.rubric_item_id}:{self.order}>"
 
 
 class DailyChallenge(models.Model):
@@ -121,6 +170,7 @@ class ChallengeAttempt(models.Model):
         choices=Status.choices,
         default=Status.IN_PROGRESS,
     )
+    preferred_difficulty_bias = models.SmallIntegerField(default=0)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
@@ -161,3 +211,51 @@ class ConfidenceRating(models.Model):
 
     def __str__(self) -> str:
         return f"Confidence<{self.attempt_id}:{self.score}>"
+
+
+class ChallengeDebrief(models.Model):
+    class Status(models.TextChoices):
+        AWAITING_SELF_RATE = "AWAITING_SELF_RATE", "Awaiting self-rate"
+        AWAITING_FOLLOWUPS = "AWAITING_FOLLOWUPS", "Awaiting follow-ups"
+        COMPLETED = "COMPLETED", "Completed"
+
+    attempt = models.OneToOneField(
+        ChallengeAttempt,
+        on_delete=models.CASCADE,
+        related_name="debrief",
+    )
+    status = models.CharField(
+        max_length=32,
+        choices=Status.choices,
+        default=Status.AWAITING_SELF_RATE,
+    )
+    checklist = models.JSONField(default=dict, blank=True)
+    follow_up_answers = models.JSONField(default=dict, blank=True)
+    strengths = models.JSONField(default=list, blank=True)
+    gaps = models.JSONField(default=list, blank=True)
+    next_focus = models.TextField(blank=True, default="")
+    checklist_score = models.FloatField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"Debrief<{self.attempt_id}:{self.status}>"
+
+
+class AnalyticsEvent(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="analytics_events",
+    )
+    name = models.CharField(max_length=64, db_index=True)
+    properties = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Event<{self.name}:{self.id}>"

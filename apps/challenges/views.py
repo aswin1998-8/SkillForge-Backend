@@ -6,21 +6,31 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.challenges.models import AnalyticsEvent
 from apps.challenges.serializers import (
+    AnalyticsEventSerializer,
     ChallengeAttemptSerializer,
     ChallengeSerializer,
     ChallengeSubmitSerializer,
     ConfidenceCreateSerializer,
     ConfidenceRatingSerializer,
     DailyChallengeSerializer,
+    DebriefChecklistSerializer,
+    DebriefFollowUpsSerializer,
 )
 from apps.challenges.services import (
+    challenge_is_locked,
+    complete_debrief,
+    get_attempt_for_user,
     get_challenge_or_404,
+    get_debrief_payload,
     get_or_assign_today_challenge,
     save_confidence,
     submit_challenge,
+    submit_debrief_checklist,
 )
 from apps.core.responses import success_response
+from django.utils import timezone
 
 
 class TodayChallengeView(APIView):
@@ -36,7 +46,23 @@ class ChallengeDetailView(APIView):
 
     def get(self, request: Request, challenge_id: int) -> Response:
         challenge = get_challenge_or_404(challenge_id)
-        return success_response(ChallengeSerializer(challenge).data)
+        locked, current_id = challenge_is_locked(
+            user=request.user,
+            challenge_id=challenge.id,
+        )
+        if current_id is None:
+            # No roadmap lock — still surface the current assignment for convenience.
+            try:
+                current_id = get_or_assign_today_challenge(user=request.user).challenge_id
+                locked = False
+            except Exception:  # noqa: BLE001
+                current_id = None
+                locked = False
+        data = ChallengeSerializer(challenge).data
+        data["is_locked"] = locked
+        data["today_challenge_id"] = current_id
+        data["current_challenge_id"] = current_id
+        return success_response(data)
 
 
 class ChallengeSubmitView(APIView):
@@ -72,5 +98,58 @@ class AttemptConfidenceView(APIView):
         return success_response(
             ConfidenceRatingSerializer(rating).data,
             message="Confidence saved",
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AttemptDebriefView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, attempt_id: int) -> Response:
+        attempt = get_attempt_for_user(user=request.user, attempt_id=attempt_id)
+        return success_response(get_debrief_payload(attempt=attempt))
+
+
+class AttemptDebriefChecklistView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, attempt_id: int) -> Response:
+        serializer = DebriefChecklistSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = submit_debrief_checklist(
+            user=request.user,
+            attempt_id=attempt_id,
+            checklist=serializer.validated_data["checklist"],
+        )
+        return success_response(payload, message="Checklist saved")
+
+
+class AttemptDebriefCompleteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, attempt_id: int) -> Response:
+        serializer = DebriefFollowUpsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = complete_debrief(
+            user=request.user,
+            attempt_id=attempt_id,
+            follow_up_answers=serializer.validated_data["follow_up_answers"],
+        )
+        return success_response(payload, message="Debrief completed")
+
+
+class AnalyticsEventView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        serializer = AnalyticsEventSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = AnalyticsEvent.objects.create(
+            user=request.user,
+            name=serializer.validated_data["name"],
+            properties=serializer.validated_data.get("properties") or {},
+        )
+        return success_response(
+            {"id": event.id, "name": event.name, "created_at": timezone.now().isoformat()},
             status=status.HTTP_201_CREATED,
         )

@@ -8,10 +8,30 @@ from apps.diagnostics.views import (
     DiagnosticSessionListCreateView,
     DiagnosticSessionRunTestsView,
     FrameworkTopicListView,
+    QuickScoreDetailView,
+    QuickScoreOgImageView,
+    QuickScoreQuestionsView,
+    QuickScoreSubmitView,
 )
 
 urlpatterns = [
     path("framework-topics/", FrameworkTopicListView.as_view(), name="framework-topics"),
+    path(
+        "quick-score/questions/",
+        QuickScoreQuestionsView.as_view(),
+        name="quick-score-questions",
+    ),
+    path("quick-score/", QuickScoreSubmitView.as_view(), name="quick-score-submit"),
+    path(
+        "quick-score/<int:attempt_id>/",
+        QuickScoreDetailView.as_view(),
+        name="quick-score-detail",
+    ),
+    path(
+        "quick-score/<int:attempt_id>/og.png",
+        QuickScoreOgImageView.as_view(),
+        name="quick-score-og",
+    ),
     path(
         "diagnostic-sessions/",
         DiagnosticSessionListCreateView.as_view(),

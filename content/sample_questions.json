@@ -120,6 +120,72 @@
       "test_cases": [
         { "input": "", "expected_output": "[1, 2, 3]", "is_hidden": false }
       ]
+    },
+    {
+      "framework": "postgresql",
+      "competency_area": "indexing",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "Which index type is the default B-tree best suited for?",
+      "choices": [
+        { "text": "Equality and range comparisons on sortable columns", "is_correct": true },
+        { "text": "Only full-text search queries", "is_correct": false },
+        { "text": "Only JSON containment operators", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "postgresql",
+      "competency_area": "joins",
+      "modality": "scenario",
+      "difficulty_tier": 2,
+      "question_text": "A report joins users to orders and unexpectedly drops users with zero orders. What join type is likely wrong, and what should you use instead?",
+      "reference_answer": {
+        "text": "INNER JOIN drops non-matching users. Use LEFT JOIN from users to orders (and aggregate carefully) to keep users with zero orders.",
+        "rubric_points": [
+          "Identifies INNER JOIN filtering unmatched rows",
+          "Recommends LEFT/OUTER JOIN from the driving table",
+          "Mentions aggregation or COALESCE for zero counts"
+        ]
+      }
+    },
+    {
+      "framework": "postgresql",
+      "competency_area": "transactions",
+      "modality": "foundational",
+      "difficulty_tier": 2,
+      "question_text": "What does READ COMMITTED prevent that READ UNCOMMITTED would allow?",
+      "choices": [
+        { "text": "Dirty reads of uncommitted writes from other transactions", "is_correct": true },
+        { "text": "All phantom reads forever", "is_correct": false },
+        { "text": "Deadlocks", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "postgresql",
+      "competency_area": "query_plans",
+      "modality": "diagnose",
+      "difficulty_tier": 2,
+      "question_text": "EXPLAIN shows Seq Scan on a 20M-row table filtered by email = $1. What are two likely causes?",
+      "reference_answer": {
+        "text": "Missing index on email, or planner estimates that a sequential scan is cheaper (bad stats, low selectivity, wrong type cast preventing index use).",
+        "rubric_points": [
+          "Mentions missing or unusable index",
+          "Mentions stats/selectivity/cast issues",
+          "Suggests EXPLAIN (ANALYZE, BUFFERS) or CREATE INDEX verification"
+        ]
+      }
+    },
+    {
+      "fundamentals": "sql",
+      "competency_area": "normalization",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "What is the main goal of normalizing to 3NF?",
+      "choices": [
+        { "text": "Reduce redundant data and update anomalies via dependency clarity", "is_correct": true },
+        { "text": "Always maximize join count for performance", "is_correct": false },
+        { "text": "Store every attribute as JSON blobs", "is_correct": false }
+      ]
     }
   ]
 }

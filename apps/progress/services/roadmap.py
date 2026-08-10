@@ -1,4 +1,4 @@
-"""Roadmap derived from diagnostic synthesis items, with gap/challenge fallback."""
+"""Roadmap derived from the latest diagnostic synthesis items, with gap fallback."""
 
 from __future__ import annotations
 
@@ -13,48 +13,68 @@ from apps.users.models import User
 
 
 def build_roadmap(user: User) -> dict[str, Any]:
-    synthesis_items = list(
-        DiagnosticRoadmapItem.objects.filter(user=user)
-        .select_related("challenge", "session")
-        .order_by("priority", "id")
+    latest = (
+        DiagnosticSession.objects.filter(
+            user=user,
+            status=DiagnosticSession.Status.COMPLETED,
+        )
+        .order_by("-completed_at", "-id")
+        .first()
     )
 
-    if synthesis_items:
-        steps = [
-            {
-                "modality": item.challenge_modality,
-                "topic": item.topic,
-                "priority": item.priority,
-                "challenge": ChallengeSerializer(item.challenge).data
-                if item.challenge_id
-                else None,
-                "source": "diagnostic_synthesis",
-                "session_id": item.session_id,
-            }
-            for item in synthesis_items
-        ]
-        linked = [i.challenge for i in synthesis_items if i.challenge_id]
-        session = (
-            DiagnosticSession.objects.filter(
-                user=user,
-                status=DiagnosticSession.Status.COMPLETED,
-            )
-            .order_by("-completed_at")
-            .first()
+    synthesis_items: list[DiagnosticRoadmapItem] = []
+    if latest is not None:
+        synthesis_items = list(
+            DiagnosticRoadmapItem.objects.filter(user=user, session=latest)
+            .select_related("challenge", "session")
+            .order_by("priority", "id")
         )
+        # Defensive: completed diagnostic but no items — rebuild once.
+        if not synthesis_items:
+            from apps.diagnostics.roadmap_rebuild import rebuild_roadmap_items_from_session
+
+            rebuild_roadmap_items_from_session(latest)
+            synthesis_items = list(
+                DiagnosticRoadmapItem.objects.filter(user=user, session=latest)
+                .select_related("challenge", "session")
+                .order_by("priority", "id")
+            )
+
+    if synthesis_items:
+        steps = []
+        linked = []
+        for item in synthesis_items:
+            challenge = item.challenge
+            if challenge is not None and not challenge.is_active:
+                challenge = None
+            if challenge is not None:
+                linked.append(challenge)
+            steps.append(
+                {
+                    "modality": item.challenge_modality,
+                    "topic": item.topic,
+                    "priority": item.priority,
+                    "status": getattr(item, "status", None) or "not_started",
+                    "challenge": ChallengeSerializer(challenge).data
+                    if challenge is not None
+                    else None,
+                    "source": "diagnostic_synthesis",
+                    "session_id": item.session_id,
+                }
+            )
         return {
             "source": "diagnostic_synthesis",
             "steps": steps,
             "suggested_challenges": ChallengeSerializer(linked, many=True).data,
             "focus_skills": [
                 g.get("skill_area")
-                for g in ((session.synthesis or {}).get("gaps") or [])
+                for g in ((latest.synthesis or {}).get("gaps") or [])
                 if isinstance(g, dict) and g.get("skill_area")
             ][:5]
-            if session
+            if latest
             else [],
             "annotations": {},
-            "synthesis": session.synthesis if session else {},
+            "synthesis": latest.synthesis if latest else {},
         }
 
     gaps = list(list_user_gaps(user, include_closed=False).select_related("skill"))
@@ -72,9 +92,8 @@ def build_roadmap(user: User) -> dict[str, Any]:
             .order_by("difficulty", "id")[:10]
         )
 
-    ordered = list(suggested)
-    annotations: dict[int, str] = {}
     ordered = sorted(suggested, key=lambda c: (c.difficulty, c.id))
+    annotations: dict[int, str] = {}
 
     steps = []
     for gap in gaps:

@@ -101,6 +101,8 @@ class Profile(models.Model):
     # Languages/frameworks the user wants to learn for the target role (Step 03).
     target_learn_skills = models.JSONField(default=list, blank=True)
     onboarding_completed = models.BooleanField(default=False)
+    diagnostic_cycle = models.PositiveSmallIntegerField(default=1)
+    diagnostic_difficulty_bump = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

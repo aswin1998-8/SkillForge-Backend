@@ -42,7 +42,7 @@ def test_framework_topics_list(authed_api: APIClient, seeded_topics) -> None:
     response = authed_api.get("/api/v1/framework-topics/")
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) == 4
+    assert len(data) == 5
 
 
 @pytest.mark.django_db
@@ -57,6 +57,30 @@ def test_start_diagnostic_session(authed_api: APIClient, user: User, seeded_topi
     assert payload["status"] == "AWAITING_ANSWERS"
     assert payload["current_stage"] == "FOUNDATIONAL"
     assert len(payload["current_questions"]) > 0
+
+
+@pytest.mark.django_db
+def test_resume_active_diagnostic_session(authed_api: APIClient, user: User, seeded_topics) -> None:
+    first = authed_api.post(
+        "/api/v1/diagnostic-sessions/",
+        {"goal": "sharpen_current", "framework_slugs": ["react", "django"]},
+        format="json",
+    )
+    assert first.status_code == 201
+    session_id = first.json()["data"]["id"]
+
+    active = authed_api.get("/api/v1/diagnostic-sessions/")
+    assert active.status_code == 200
+    assert active.json()["data"]["active_session"]["id"] == session_id
+
+    second = authed_api.post(
+        "/api/v1/diagnostic-sessions/",
+        {"goal": "switch_role", "framework_slugs": ["django"]},
+        format="json",
+    )
+    assert second.status_code == 200
+    assert second.json()["data"]["id"] == session_id
+    assert second.json()["message"] == "Diagnostic session resumed"
 
 
 @pytest.mark.django_db

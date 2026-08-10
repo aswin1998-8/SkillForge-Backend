@@ -68,13 +68,13 @@ def test_diagnostic_session_start(api: APIClient, seeded) -> None:
         {"goal": "sharpen_current", "framework_slugs": ["react"]},
         format="json",
     )
-    assert start.status_code == 201
+    assert start.status_code == 201, start.data
     assert start.data["data"]["status"] == "AWAITING_ANSWERS"
     assert len(start.data["data"]["current_questions"]) > 0
 
 
 @pytest.mark.django_db
-def test_daily_challenge_one_per_day(api: APIClient, seeded) -> None:
+def test_current_challenge_assignment_stable(api: APIClient, seeded) -> None:
     user = seeded["user"]
     api.force_authenticate(user=user)
     first = api.get("/api/v1/challenges/today/")
@@ -83,6 +83,53 @@ def test_daily_challenge_one_per_day(api: APIClient, seeded) -> None:
     assert second.status_code == 200
     assert first.data["data"]["id"] == second.data["data"]["id"]
     assert DailyChallenge.objects.filter(user=user).count() == 1
+
+
+@pytest.mark.django_db
+def test_sequential_unlock_locks_other_challenges(api: APIClient, seeded) -> None:
+    user = seeded["user"]
+    from apps.diagnostics.models import DiagnosticRoadmapItem, DiagnosticSession
+
+    session = DiagnosticSession.objects.create(
+        user=user,
+        goal="sharpen_current",
+        current_role="Frontend Developer",
+        target_role="Frontend Developer",
+        status=DiagnosticSession.Status.COMPLETED,
+    )
+    primary = seeded["challenge"]
+    other = Challenge.objects.create(
+        title="Other Challenge",
+        slug="other-challenge",
+        modality=Challenge.Modality.THEORY,
+        difficulty=1,
+        is_active=True,
+    )
+    DiagnosticRoadmapItem.objects.create(
+        session=session,
+        user=user,
+        challenge_modality="THEORY",
+        topic="hooks",
+        priority=1,
+        challenge=primary,
+        status="in_progress",
+    )
+    DiagnosticRoadmapItem.objects.create(
+        session=session,
+        user=user,
+        challenge_modality="THEORY",
+        topic="state",
+        priority=2,
+        challenge=other,
+        status="not_started",
+    )
+    api.force_authenticate(user=user)
+    locked = api.get(f"/api/v1/challenges/{other.id}/")
+    assert locked.status_code == 200
+    assert locked.data["data"]["is_locked"] is True
+    open_one = api.get(f"/api/v1/challenges/{primary.id}/")
+    assert open_one.status_code == 200
+    assert open_one.data["data"]["is_locked"] is False
 
 
 @pytest.mark.django_db
@@ -97,7 +144,25 @@ def test_challenge_submit_completes(api: APIClient, seeded) -> None:
         format="json",
     )
     assert submit.status_code in {200, 201}
-    assert submit.data["data"]["status"] == "COMPLETED"
+    assert submit.data["data"]["status"] == "SUBMITTED"
+    attempt_id = submit.data["data"]["id"]
+    checklist = api.get(f"/api/v1/attempts/{attempt_id}/debrief/")
+    assert checklist.status_code == 200
+    items = checklist.data["data"]["rubric_items"]
+    body = {str(i["id"]): True for i in items}
+    checked = api.post(
+        f"/api/v1/attempts/{attempt_id}/debrief/checklist/",
+        {"checklist": body},
+        format="json",
+    )
+    assert checked.status_code == 200
+    done = api.post(
+        f"/api/v1/attempts/{attempt_id}/debrief/complete/",
+        {"follow_up_answers": {}},
+        format="json",
+    )
+    assert done.status_code == 200
+    assert done.data["data"]["status"] == "COMPLETED"
 
 
 @pytest.mark.django_db

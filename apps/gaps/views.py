@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.gaps.serializers import UserSkillGapSerializer
-from apps.gaps.services import list_user_gaps
+from apps.gaps.services import build_gap_analysis, list_user_gaps
 
 
 class UserSkillGapListView(APIView):
@@ -21,3 +21,11 @@ class UserSkillGapListView(APIView):
         }
         gaps = list_user_gaps(request.user, include_closed=include_closed)
         return success_response(UserSkillGapSerializer(gaps, many=True).data)
+
+
+class SkillGapAnalysisView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        return success_response(build_gap_analysis(request.user))
+

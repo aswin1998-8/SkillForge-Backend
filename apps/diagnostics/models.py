@@ -11,6 +11,7 @@ class FundamentalsTopic(models.Model):
     class LanguageFamily(models.TextChoices):
         JAVASCRIPT = "javascript", "JavaScript / TypeScript"
         PYTHON = "python", "Python"
+        SQL = "sql", "SQL"
 
     language_family = models.CharField(
         max_length=32,
@@ -44,6 +45,7 @@ class FrameworkTopic(models.Model):
         NEXTJS = "nextjs", "Next.js"
         DJANGO = "django", "Django"
         FASTAPI = "fastapi", "FastAPI"
+        POSTGRESQL = "postgresql", "PostgreSQL"
 
     framework_name = models.CharField(
         max_length=32,
@@ -231,6 +233,7 @@ class DiagnosticSession(models.Model):
     selection_log = models.JSONField(default=list, blank=True)
     synthesis = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
+    difficulty_bump = models.PositiveSmallIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
@@ -310,6 +313,7 @@ class DiagnosticRoadmapItem(models.Model):
         DIAGNOSE = "DIAGNOSE", "Diagnose"
         ARCHITECT = "ARCHITECT", "Architect"
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
+        USE_AI = "USE_AI", "Use AI without skill atrophy"
         COMMUNICATE = "COMMUNICATE", "Communicate"
 
     session = models.ForeignKey(
@@ -325,6 +329,15 @@ class DiagnosticRoadmapItem(models.Model):
     challenge_modality = models.CharField(max_length=32, choices=Modality.choices)
     topic = models.CharField(max_length=512)
     priority = models.PositiveIntegerField(default=1)
+    status = models.CharField(
+        max_length=32,
+        default="not_started",
+        choices=[
+            ("not_started", "Not started"),
+            ("in_progress", "In progress"),
+            ("closed", "Closed"),
+        ],
+    )
     challenge = models.ForeignKey(
         "challenges.Challenge",
         null=True,
@@ -339,3 +352,112 @@ class DiagnosticRoadmapItem(models.Model):
 
     def __str__(self) -> str:
         return f"RoadmapItem<{self.user_id}:{self.priority}:{self.topic[:40]}>"
+
+
+class QuickScoreQuestion(models.Model):
+    class Track(models.TextChoices):
+        FRONTEND = "frontend", "Frontend"
+        BACKEND = "backend", "Backend"
+
+    track = models.CharField(max_length=32, choices=Track.choices)
+    competency_area = models.CharField(max_length=255)
+    question_text = models.TextField()
+    weight = models.PositiveSmallIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["track", "order", "id"]
+
+    def __str__(self) -> str:
+        return f"QuickScoreQ<{self.track}:{self.id}>"
+
+
+class QuickScoreChoice(models.Model):
+    question = models.ForeignKey(
+        QuickScoreQuestion,
+        on_delete=models.CASCADE,
+        related_name="choices",
+    )
+    choice_text = models.TextField()
+    points = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return f"QuickScoreChoice<{self.question_id}:{self.points}>"
+
+
+class QuickScoreParagraph(models.Model):
+    class Band(models.TextChoices):
+        SOLID_FOUNDATION = "solid_foundation", "Solid Foundation"
+        EMERGING_GAPS = "emerging_gaps", "Emerging Gaps"
+        AT_RISK = "at_risk", "At Risk of Falling Behind"
+        SIGNIFICANT_GAP = "significant_gap", "Significant Gap"
+
+    band = models.CharField(max_length=32, choices=Band.choices)
+    track = models.CharField(max_length=32, choices=QuickScoreQuestion.Track.choices)
+    body_text = models.TextField()
+
+    class Meta:
+        unique_together = ("band", "track")
+        ordering = ["track", "band"]
+
+    def __str__(self) -> str:
+        return f"QuickScoreParagraph<{self.track}:{self.band}>"
+
+
+class QuickScoreAttempt(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="quick_score_attempts",
+    )
+    track = models.CharField(max_length=32, choices=QuickScoreQuestion.Track.choices)
+    answers = models.JSONField(default=dict, blank=True)
+    total_score = models.PositiveSmallIntegerField(default=0)
+    band = models.CharField(max_length=32, choices=QuickScoreParagraph.Band.choices)
+    paragraph_text = models.TextField(blank=True, default="")
+    highlight_areas = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"QuickScoreAttempt<{self.user_id}:{self.total_score}:{self.band}>"
+
+
+class SkillAreaFragment(models.Model):
+    class Level(models.TextChoices):
+        STRONG = "strong", "Strong"
+        PARTIAL = "partial", "Partial"
+        GAP = "gap", "Gap"
+
+    competency_area = models.CharField(max_length=255)
+    level = models.CharField(max_length=16, choices=Level.choices)
+    body_text = models.TextField()
+
+    class Meta:
+        unique_together = ("competency_area", "level")
+        ordering = ["competency_area", "level"]
+
+    def __str__(self) -> str:
+        return f"Fragment<{self.competency_area}:{self.level}>"
+
+
+class MarketEvidence(models.Model):
+    competency_area = models.CharField(max_length=255, db_index=True)
+    stat_text = models.TextField()
+    source_name = models.CharField(max_length=255)
+    source_date = models.CharField(max_length=64, blank=True, default="")
+    as_of = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["competency_area", "id"]
+
+    def __str__(self) -> str:
+        return f"Evidence<{self.competency_area}:{self.source_name}>"

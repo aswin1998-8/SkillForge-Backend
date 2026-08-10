@@ -34,8 +34,13 @@ def set_jwt_cookies(response: Response, refresh: RefreshToken) -> Response:
 
 
 def clear_jwt_cookies(response: Response) -> Response:
-    response.delete_cookie(settings.ACCESS_TOKEN_COOKIE_NAME, path="/")
-    response.delete_cookie(settings.REFRESH_TOKEN_COOKIE_NAME, path="/")
+    # Django's delete_cookie accepts path/domain/samesite (not secure).
+    common = {
+        "samesite": settings.COOKIE_SAMESITE,
+        "path": "/",
+    }
+    response.delete_cookie(settings.ACCESS_TOKEN_COOKIE_NAME, **common)
+    response.delete_cookie(settings.REFRESH_TOKEN_COOKIE_NAME, **common)
     return response
 
 

@@ -10,6 +10,9 @@ from apps.diagnostics.models import (
     FundamentalsTopic,
     Question,
     QuestionChoice,
+    QuickScoreAttempt,
+    QuickScoreChoice,
+    QuickScoreQuestion,
     ReferenceAnswer,
     SessionAnswer,
     SessionQuestion,
@@ -137,6 +140,7 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
             "selection_log",
             "synthesis",
             "error",
+            "difficulty_bump",
             "questions",
             "current_questions",
             "roadmap_items",
@@ -209,3 +213,69 @@ class SelfRateAnswerSerializer(serializers.Serializer):
 class RunTestsSerializer(serializers.Serializer):
     question_id = serializers.IntegerField()
     code = serializers.CharField(allow_blank=False)
+
+
+class QuickScoreChoiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickScoreChoice
+        fields = ("id", "choice_text")
+
+
+class QuickScoreQuestionSerializer(serializers.ModelSerializer):
+    choices = QuickScoreChoiceSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = QuickScoreQuestion
+        fields = (
+            "id",
+            "track",
+            "competency_area",
+            "question_text",
+            "weight",
+            "order",
+            "choices",
+        )
+
+
+class QuickScoreAttemptSerializer(serializers.ModelSerializer):
+    band_label = serializers.SerializerMethodField()
+    track_label = serializers.CharField(source="get_track_display", read_only=True)
+
+    class Meta:
+        model = QuickScoreAttempt
+        fields = (
+            "id",
+            "track",
+            "track_label",
+            "total_score",
+            "band",
+            "band_label",
+            "paragraph_text",
+            "highlight_areas",
+            "created_at",
+        )
+
+    def get_band_label(self, obj) -> str:
+        from apps.diagnostics.quick_score import BAND_LABELS
+
+        return BAND_LABELS.get(obj.band, obj.band)
+
+
+class SubmitQuickScoreSerializer(serializers.Serializer):
+    track = serializers.ChoiceField(choices=["frontend", "backend"])
+    answers = serializers.ListField(child=serializers.DictField(), allow_empty=False)
+
+    def validate_answers(self, value: list) -> list:
+        cleaned = []
+        for item in value:
+            if "question_id" not in item or "choice_id" not in item:
+                raise serializers.ValidationError(
+                    "Each answer requires question_id and choice_id."
+                )
+            cleaned.append(
+                {
+                    "question_id": int(item["question_id"]),
+                    "choice_id": int(item["choice_id"]),
+                }
+            )
+        return cleaned

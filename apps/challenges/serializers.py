@@ -38,6 +38,7 @@ class ChallengeSerializer(serializers.ModelSerializer):
             "requirements",
             "constraints",
             "workspace_config",
+            "directions",
             "is_active",
             "skills",
         )
@@ -75,6 +76,7 @@ class ChallengeAttemptSerializer(serializers.ModelSerializer):
     challenge = ChallengeSerializer(read_only=True)
     submission = SubmissionSerializer(read_only=True)
     confidence = ConfidenceRatingSerializer(read_only=True)
+    debrief_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ChallengeAttempt
@@ -87,7 +89,12 @@ class ChallengeAttemptSerializer(serializers.ModelSerializer):
             "completed_at",
             "submission",
             "confidence",
+            "debrief_id",
         )
+
+    def get_debrief_id(self, obj) -> int | None:
+        debrief = getattr(obj, "debrief", None)
+        return debrief.id if debrief else None
 
 
 class ChallengeSubmitSerializer(serializers.Serializer):
@@ -101,3 +108,16 @@ class ChallengeSubmitSerializer(serializers.Serializer):
 class ConfidenceCreateSerializer(serializers.Serializer):
     score = serializers.IntegerField(min_value=1, max_value=5)
     note = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class DebriefChecklistSerializer(serializers.Serializer):
+    checklist = serializers.DictField(child=serializers.BooleanField())
+
+
+class DebriefFollowUpsSerializer(serializers.Serializer):
+    follow_up_answers = serializers.DictField(child=serializers.CharField(allow_blank=True))
+
+
+class AnalyticsEventSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=64)
+    properties = serializers.DictField(required=False, default=dict)

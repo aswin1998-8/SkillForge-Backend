@@ -27,6 +27,7 @@ from apps.users.services import (
     request_password_reset,
     resend_verification_email,
     reset_password,
+    reset_user_progress,
     update_profile,
     verify_email_token,
 )
@@ -218,3 +219,15 @@ class ProfileView(APIView):
         serializer.is_valid(raise_exception=True)
         profile = update_profile(request.user, serializer.validated_data)
         return success_response(ProfileSerializer(profile).data)
+
+
+class StaffResetProgressView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request) -> Response:
+        confirm = ""
+        if isinstance(request.data, dict):
+            confirm = str(request.data.get("confirm") or "")
+        result = reset_user_progress(user=request.user, confirm=confirm)
+        return success_response(result, message="Progress reset. Onboarding restarted.")
+

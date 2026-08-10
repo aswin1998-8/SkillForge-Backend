@@ -117,11 +117,19 @@ class ProfileSerializer(serializers.ModelSerializer):
             "known_skills",
             "target_learn_skills",
             "onboarding_completed",
+            "diagnostic_cycle",
+            "diagnostic_difficulty_bump",
             "complete_onboarding",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("onboarding_completed", "created_at", "updated_at")
+        read_only_fields = (
+            "onboarding_completed",
+            "diagnostic_cycle",
+            "diagnostic_difficulty_bump",
+            "created_at",
+            "updated_at",
+        )
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -135,7 +143,8 @@ class UserSerializer(serializers.ModelSerializer):
             "first_name",
             "last_name",
             "email_verified",
+            "is_staff",
             "profile",
             "date_joined",
         )
-        read_only_fields = ("email_verified",)
+        read_only_fields = ("email_verified", "is_staff")

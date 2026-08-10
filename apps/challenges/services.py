@@ -12,17 +12,88 @@ from rest_framework.exceptions import NotFound, ValidationError
 from apps.challenges.models import (
     Challenge,
     ChallengeAttempt,
+    ChallengeDebrief,
+    ChallengeFollowUp,
+    ChallengeRubricItem,
     ConfidenceRating,
     DailyChallenge,
     Submission,
 )
+from apps.diagnostics.models import DiagnosticRoadmapItem
 from apps.gaps.models import UserSkillGap
+from apps.gaps.services import upsert_user_skill_gap
+from apps.roles.models import Skill
 from apps.users.models import User
+
+
+def _skill_slug_from_topic(topic: str) -> str:
+    return str(topic or "").strip().lower().replace(" ", "_")[:255]
+
+
+def _update_gaps_for_challenge(
+    *,
+    user: User,
+    challenge: Challenge,
+    status: str,
+    evidence_source_type: str,
+    evidence_source_id: str,
+    evidence_summary: str,
+) -> None:
+    topics = (
+        DiagnosticRoadmapItem.objects.filter(user=user, challenge=challenge)
+        .values_list("topic", flat=True)
+        .distinct()
+    )
+    for topic in topics:
+        slug = _skill_slug_from_topic(topic)
+        if not slug:
+            continue
+        skill = Skill.objects.filter(slug=slug).first()
+        if skill is None:
+            skill, _ = Skill.objects.get_or_create(
+                slug=slug,
+                defaults={
+                    "name": slug.replace("_", " ").title(),
+                    "description": f"Practice competency: {slug.replace('_', ' ')}",
+                },
+            )
+        upsert_user_skill_gap(
+            user=user,
+            skill=skill,
+            status=status,
+            evidence_source_type=evidence_source_type,
+            evidence_source_id=evidence_source_id,
+            evidence_summary=evidence_summary,
+        )
+
+
+def _maybe_increment_diagnostic_cycle(*, user: User) -> None:
+    """When the last roadmap step closes, bump difficulty for the next diagnostic."""
+    if DiagnosticRoadmapItem.objects.filter(user=user).exclude(status="closed").exists():
+        return
+    if not DiagnosticRoadmapItem.objects.filter(user=user).exists():
+        return
+    profile = getattr(user, "profile", None)
+    if profile is None:
+        return
+    profile.diagnostic_difficulty_bump = int(profile.diagnostic_difficulty_bump or 0) + 1
+    profile.diagnostic_cycle = int(profile.diagnostic_cycle or 1) + 1
+    profile.save(
+        update_fields=[
+            "diagnostic_difficulty_bump",
+            "diagnostic_cycle",
+            "updated_at",
+        ]
+    )
 
 
 def get_challenge_or_404(challenge_id: int) -> Challenge:
     try:
-        return Challenge.objects.prefetch_related("challenge_skills__skill").get(
+        return Challenge.objects.prefetch_related(
+            "challenge_skills__skill",
+            "rubric_items__follow_ups",
+            "model_answer",
+        ).get(
             pk=challenge_id,
             is_active=True,
         )
@@ -30,30 +101,106 @@ def get_challenge_or_404(challenge_id: int) -> Challenge:
         raise NotFound("Challenge not found.") from exc
 
 
-@transaction.atomic
-def get_or_assign_today_challenge(*, user: User, on_date: date | None = None) -> DailyChallenge:
-    today = on_date or timezone.localdate()
-    existing = (
-        DailyChallenge.objects.select_related("challenge")
-        .prefetch_related("challenge__challenge_skills__skill")
-        .filter(user=user, date=today)
+def _preferred_difficulty(user: User) -> int | None:
+    last = (
+        ChallengeAttempt.objects.filter(user=user, status=ChallengeAttempt.Status.COMPLETED)
+        .select_related("debrief", "challenge")
+        .order_by("-completed_at")
         .first()
     )
-    if existing:
-        return existing
+    if last is None:
+        return None
+    base = last.challenge.difficulty
+    debrief = getattr(last, "debrief", None)
+    if debrief and debrief.checklist_score is not None:
+        if debrief.checklist_score >= 0.7:
+            return min(base + 1, 5)
+        if debrief.checklist_score < 0.4:
+            return max(base - 1, 1)
+    return base
 
+
+def _direction_for_user(user: User) -> list[str]:
+    profile = getattr(user, "profile", None)
+    goal = (getattr(profile, "technical_goal", "") or "").lower()
+    role = (getattr(profile, "current_role", "") or "").lower()
+    if "switch" in goal or "new role" in goal:
+        if "front" in role:
+            return ["fe_to_be", "backend_mastery"]
+        return ["be_to_fe", "frontend_mastery"]
+    if "front" in role:
+        return ["frontend_mastery"]
+    if "back" in role:
+        return ["backend_mastery"]
+    return ["frontend_mastery", "backend_mastery"]
+
+
+def get_active_roadmap_item(*, user: User) -> DiagnosticRoadmapItem | None:
+    return (
+        DiagnosticRoadmapItem.objects.filter(user=user)
+        .exclude(status="closed")
+        .order_by("priority", "id")
+        .select_related("challenge")
+        .first()
+    )
+
+
+def get_unlocked_challenge_id(*, user: User) -> int | None:
+    """
+    Sequential unlock: only the first non-closed roadmap challenge is playable.
+    Returns None when the user has no roadmap (no sequential lock) or all steps are done.
+    """
+    if not DiagnosticRoadmapItem.objects.filter(user=user).exists():
+        return None
+    item = get_active_roadmap_item(user=user)
+    if item is None:
+        return None
+    if item.challenge_id:
+        return item.challenge_id
+    # Roadmap step exists but isn't linked yet — unlock the resolved fallback.
+    return _pick_fallback_challenge(user=user).id
+
+
+def challenge_is_locked(*, user: User, challenge_id: int) -> tuple[bool, int | None]:
+    unlocked_id = get_unlocked_challenge_id(user=user)
+    if unlocked_id is None:
+        return False, None
+    return challenge_id != unlocked_id, unlocked_id
+
+
+def _pick_fallback_challenge(*, user: User) -> Challenge:
     open_gap_skill_ids = list(
         UserSkillGap.objects.filter(user=user)
         .exclude(status=UserSkillGap.Status.CLOSED)
         .values_list("skill_id", flat=True)
     )
-
+    roadmap_topics = list(
+        DiagnosticRoadmapItem.objects.filter(user=user)
+        .exclude(status="closed")
+        .values_list("topic", flat=True)[:8]
+    )
     completed_challenge_ids = ChallengeAttempt.objects.filter(
         user=user,
         status__in=[ChallengeAttempt.Status.COMPLETED, ChallengeAttempt.Status.SUBMITTED],
     ).values_list("challenge_id", flat=True)
 
     qs = Challenge.objects.filter(is_active=True).exclude(id__in=completed_challenge_ids)
+    directions = _direction_for_user(user)
+    if directions:
+        direction_q = Q()
+        for d in directions:
+            direction_q |= Q(directions__contains=[d])
+        directed = qs.filter(direction_q)
+        if directed.exists():
+            qs = directed
+
+    preferred = _preferred_difficulty(user)
+    if preferred is not None:
+        qs = qs.filter(
+            difficulty__gte=max(preferred - 1, 1),
+            difficulty__lte=min(preferred + 1, 5),
+        )
+
     if open_gap_skill_ids:
         qs = qs.filter(challenge_skills__skill_id__in=open_gap_skill_ids).annotate(
             gap_match_count=Count(
@@ -61,6 +208,15 @@ def get_or_assign_today_challenge(*, user: User, on_date: date | None = None) ->
                 filter=Q(challenge_skills__skill_id__in=open_gap_skill_ids),
             )
         ).order_by("-gap_match_count", "difficulty", "id")
+    elif roadmap_topics:
+        topic_q = Q()
+        for topic in roadmap_topics:
+            human = topic.replace("_", " ")[:20]
+            topic_q |= Q(title__icontains=human) | Q(scenario__icontains=human)
+            topic_q |= Q(workspace_config__competency_areas__contains=[topic])
+        topic_qs = qs.filter(topic_q)
+        qs = topic_qs if topic_qs.exists() else qs
+        qs = qs.order_by("difficulty", "id")
     else:
         qs = qs.order_by("difficulty", "id")
 
@@ -69,6 +225,47 @@ def get_or_assign_today_challenge(*, user: User, on_date: date | None = None) ->
         challenge = Challenge.objects.filter(is_active=True).order_by("difficulty", "id").first()
     if challenge is None:
         raise ValidationError("No active challenges available.")
+    return challenge
+
+
+def resolve_current_challenge(*, user: User) -> Challenge:
+    """Current unlocked challenge from roadmap, or a fallback catalog pick."""
+    item = get_active_roadmap_item(user=user)
+    if item is not None:
+        if item.status == "not_started":
+            item.status = "in_progress"
+            item.save(update_fields=["status"])
+        if item.challenge_id:
+            return item.challenge
+    return _pick_fallback_challenge(user=user)
+
+
+@transaction.atomic
+def get_or_assign_today_challenge(*, user: User, on_date: date | None = None) -> DailyChallenge:
+    """
+    Returns the user's current unlocked challenge assignment.
+    Kept under the /challenges/today/ endpoint for compatibility, but no longer
+    gates progress to one challenge per calendar day.
+    """
+    today = on_date or timezone.localdate()
+    challenge = resolve_current_challenge(user=user)
+
+    existing = (
+        DailyChallenge.objects.select_related("challenge")
+        .prefetch_related("challenge__challenge_skills__skill")
+        .filter(user=user, date=today)
+        .first()
+    )
+    if existing:
+        if existing.challenge_id != challenge.id:
+            existing.challenge = challenge
+            existing.status = DailyChallenge.Status.AVAILABLE
+            existing.save(update_fields=["challenge", "status", "updated_at"])
+        return (
+            DailyChallenge.objects.select_related("challenge")
+            .prefetch_related("challenge__challenge_skills__skill")
+            .get(pk=existing.pk)
+        )
 
     return DailyChallenge.objects.create(
         user=user,
@@ -86,8 +283,39 @@ def submit_challenge(
     payload: dict,
 ) -> ChallengeAttempt:
     challenge = get_challenge_or_404(challenge_id)
+    locked, unlocked_id = challenge_is_locked(user=user, challenge_id=challenge.id)
+    if locked:
+        raise ValidationError(
+            "Complete your current roadmap challenge before unlocking the next one."
+        )
+
     today = timezone.localdate()
-    daily = DailyChallenge.objects.filter(user=user, date=today, challenge=challenge).first()
+    daily = DailyChallenge.objects.filter(user=user, date=today).first()
+    if daily is None or daily.challenge_id != challenge.id:
+        daily = get_or_assign_today_challenge(user=user, on_date=today)
+        if daily.challenge_id != challenge.id:
+            # Force pointer onto the challenge being submitted (unlocked).
+            daily.challenge = challenge
+            daily.status = DailyChallenge.Status.AVAILABLE
+            daily.save(update_fields=["challenge", "status", "updated_at"])
+
+    if daily.status in {DailyChallenge.Status.SUBMITTED, DailyChallenge.Status.COMPLETED}:
+        raise ValidationError(
+            "This challenge was already submitted. Finish the debrief to unlock the next one."
+        )
+
+    already = ChallengeAttempt.objects.filter(
+        user=user,
+        challenge=challenge,
+        status__in=[
+            ChallengeAttempt.Status.SUBMITTED,
+            ChallengeAttempt.Status.COMPLETED,
+        ],
+    ).exists()
+    if already:
+        raise ValidationError(
+            "This challenge was already submitted. Finish the debrief to unlock the next one."
+        )
 
     attempt = (
         ChallengeAttempt.objects.filter(
@@ -117,13 +345,28 @@ def submit_challenge(
         },
     )
 
-    attempt.status = ChallengeAttempt.Status.COMPLETED
+    attempt.status = ChallengeAttempt.Status.SUBMITTED
     attempt.completed_at = timezone.now()
     attempt.save(update_fields=["status", "completed_at"])
 
-    if daily:
-        daily.status = DailyChallenge.Status.SUBMITTED
-        daily.save(update_fields=["status", "updated_at"])
+    daily.status = DailyChallenge.Status.SUBMITTED
+    daily.save(update_fields=["status", "updated_at"])
+
+    ChallengeDebrief.objects.get_or_create(attempt=attempt)
+
+    DiagnosticRoadmapItem.objects.filter(
+        user=user,
+        challenge=challenge,
+    ).exclude(status="closed").update(status="in_progress")
+
+    _update_gaps_for_challenge(
+        user=user,
+        challenge=challenge,
+        status=UserSkillGap.Status.IN_PROGRESS,
+        evidence_source_type="CHALLENGE_SUBMIT",
+        evidence_source_id=str(attempt.id),
+        evidence_summary=f"Started practice on {challenge.title}",
+    )
 
     from apps.sessions.services import record_session
 
@@ -164,9 +407,162 @@ def get_attempt_for_user(*, user: User, attempt_id: int) -> ChallengeAttempt:
     try:
         return ChallengeAttempt.objects.select_related(
             "challenge",
+            "challenge__model_answer",
             "submission",
             "confidence",
             "daily_challenge",
+            "debrief",
+        ).prefetch_related(
+            "challenge__rubric_items__follow_ups",
+            "challenge__challenge_skills__skill",
         ).get(pk=attempt_id, user=user)
     except ChallengeAttempt.DoesNotExist as exc:
         raise NotFound("Challenge attempt not found.") from exc
+
+
+def get_debrief_payload(*, attempt: ChallengeAttempt) -> dict:
+    challenge = attempt.challenge
+    model = getattr(challenge, "model_answer", None)
+    debrief = getattr(attempt, "debrief", None)
+    rubric = [
+        {
+            "id": item.id,
+            "text": item.text,
+            "order": item.order,
+            "follow_ups": [
+                {"id": fu.id, "question_text": fu.question_text}
+                for fu in item.follow_ups.all()
+            ],
+        }
+        for item in challenge.rubric_items.all()
+    ]
+    return {
+        "attempt_id": attempt.id,
+        "status": debrief.status if debrief else "AWAITING_SELF_RATE",
+        "reference_text": model.reference_text if model else "",
+        "rubric_items": rubric,
+        "checklist": debrief.checklist if debrief else {},
+        "follow_up_answers": debrief.follow_up_answers if debrief else {},
+        "selected_follow_ups": _selected_follow_ups(debrief, challenge) if debrief else [],
+        "strengths": debrief.strengths if debrief else [],
+        "gaps": debrief.gaps if debrief else [],
+        "next_focus": debrief.next_focus if debrief else "",
+        "checklist_score": debrief.checklist_score if debrief else None,
+    }
+
+
+def _selected_follow_ups(debrief: ChallengeDebrief | None, challenge: Challenge) -> list[dict]:
+    if debrief is None or not debrief.checklist:
+        return []
+    selected: list[dict] = []
+    for item in challenge.rubric_items.all():
+        checked = bool(debrief.checklist.get(str(item.id)))
+        if checked:
+            continue
+        for fu in item.follow_ups.all():
+            selected.append(
+                {
+                    "id": fu.id,
+                    "rubric_item_id": item.id,
+                    "question_text": fu.question_text,
+                }
+            )
+            if len(selected) >= 5:
+                return selected
+    return selected
+
+
+@transaction.atomic
+def submit_debrief_checklist(*, user: User, attempt_id: int, checklist: dict) -> dict:
+    attempt = get_attempt_for_user(user=user, attempt_id=attempt_id)
+    debrief, _ = ChallengeDebrief.objects.get_or_create(attempt=attempt)
+    cleaned = {str(k): bool(v) for k, v in checklist.items()}
+    debrief.checklist = cleaned
+    debrief.status = ChallengeDebrief.Status.AWAITING_FOLLOWUPS
+    debrief.save(update_fields=["checklist", "status"])
+    return get_debrief_payload(attempt=attempt)
+
+
+@transaction.atomic
+def complete_debrief(
+    *,
+    user: User,
+    attempt_id: int,
+    follow_up_answers: dict,
+) -> dict:
+    attempt = get_attempt_for_user(user=user, attempt_id=attempt_id)
+    debrief = getattr(attempt, "debrief", None)
+    if debrief is None:
+        raise ValidationError("Submit checklist before follow-ups.")
+
+    debrief.follow_up_answers = {str(k): str(v) for k, v in follow_up_answers.items()}
+    items = list(attempt.challenge.rubric_items.all())
+    if not items:
+        score = 1.0
+        strengths = ["You completed the reflection loop."]
+        gaps = []
+        next_focus = "Continue with the next unlocked roadmap challenge."
+    else:
+        checked = sum(1 for i in items if debrief.checklist.get(str(i.id)))
+        score = checked / len(items)
+        strengths = [
+            i.strength_fragment or i.text
+            for i in items
+            if debrief.checklist.get(str(i.id)) and (i.strength_fragment or i.text)
+        ][:3]
+        gaps = [
+            i.gap_fragment or i.text
+            for i in items
+            if not debrief.checklist.get(str(i.id)) and (i.gap_fragment or i.text)
+        ][:3]
+        lowest = next((i for i in items if not debrief.checklist.get(str(i.id))), items[0])
+        next_focus = lowest.gap_fragment or f"Focus next on: {lowest.text}"
+
+    debrief.checklist_score = score
+    debrief.strengths = strengths
+    debrief.gaps = gaps
+    debrief.next_focus = next_focus
+    debrief.status = ChallengeDebrief.Status.COMPLETED
+    debrief.completed_at = timezone.now()
+    debrief.save()
+
+    attempt.status = ChallengeAttempt.Status.COMPLETED
+    attempt.save(update_fields=["status"])
+
+    if attempt.daily_challenge_id:
+        daily = attempt.daily_challenge
+        daily.status = DailyChallenge.Status.COMPLETED
+        daily.save(update_fields=["status", "updated_at"])
+
+    DiagnosticRoadmapItem.objects.filter(
+        user=user,
+        challenge=attempt.challenge,
+    ).update(status="closed")
+
+    _update_gaps_for_challenge(
+        user=user,
+        challenge=attempt.challenge,
+        status=UserSkillGap.Status.CLOSED,
+        evidence_source_type="CHALLENGE_DEBRIEF",
+        evidence_source_id=str(attempt.id),
+        evidence_summary=next_focus[:200] or f"Closed gap via debrief on {attempt.challenge.title}",
+    )
+
+    next_item = get_active_roadmap_item(user=user)
+    if next_item is not None and next_item.status != "in_progress":
+        next_item.status = "in_progress"
+        next_item.save(update_fields=["status"])
+
+    _maybe_increment_diagnostic_cycle(user=user)
+
+    from apps.sessions.services import record_session
+
+    record_session(
+        user=user,
+        session_type="DEBRIEF",
+        reference_id=debrief.id,
+        title=f"Debrief: {attempt.challenge.title}",
+        summary=next_focus[:200],
+    )
+
+    return get_debrief_payload(attempt=attempt)

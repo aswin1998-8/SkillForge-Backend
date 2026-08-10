@@ -35,6 +35,14 @@ logger = logging.getLogger(__name__)
 ACTIVE_STATUSES = (DiagnosticSession.Status.AWAITING_ANSWERS,)
 
 
+def get_active_session(*, user) -> DiagnosticSession | None:
+    return (
+        DiagnosticSession.objects.filter(user=user, status__in=ACTIVE_STATUSES)
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+
+
 def get_session_for_user(*, user, session_id: int) -> DiagnosticSession:
     try:
         session = DiagnosticSession.objects.prefetch_related(
@@ -92,20 +100,15 @@ def _profile_context(user) -> tuple[str, str]:
 
 @transaction.atomic
 def start_session(*, user, goal: str, framework_slugs: list[str]) -> DiagnosticSession:
-    active = DiagnosticSession.objects.filter(
-        user=user,
-        status__in=ACTIVE_STATUSES,
-    ).first()
-    if active:
-        raise ValidationError(
-            {
-                "detail": "An active diagnostic session already exists.",
-                "session_id": active.id,
-            }
-        )
+    active = get_active_session(user=user)
+    if active is not None:
+        # Resume in-progress diagnostic instead of forcing a restart.
+        return active
 
     frameworks = _resolve_frameworks(framework_slugs)
     current_role, target_role = _profile_context(user)
+    profile = getattr(user, "profile", None)
+    difficulty_bump = int(getattr(profile, "diagnostic_difficulty_bump", 0) or 0)
 
     session = DiagnosticSession.objects.create(
         user=user,
@@ -114,6 +117,7 @@ def start_session(*, user, goal: str, framework_slugs: list[str]) -> DiagnosticS
         target_role=target_role if goal == DiagnosticSession.Goal.SWITCH_ROLE else current_role,
         status=DiagnosticSession.Status.AWAITING_ANSWERS,
         current_stage=STAGE_ORDER[0],
+        difficulty_bump=difficulty_bump,
     )
     session.selected_frameworks.set(frameworks)
     session.assessment_competencies = build_assessment_competencies(session)

@@ -1,1058 +1,799 @@
 {
-    "questions": [
+  "questions": [
+    {
+      "framework": "react",
+      "modality": "foundational",
+      "competency_area": "hooks",
+      "difficulty_tier": 1,
+      "question_text": "You need a value that persists across renders but should NOT trigger a re-render when it changes (e.g. storing a setInterval ID). Which hook is designed for this?",
+      "choices": [
         {
-            "framework": "react",
-            "competency_area": "hooks",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "What is the primary purpose of a React Hook such as useState?",
-            "choices": [
-                {
-                    "text": "To let function components use React features such as state",
-                    "is_correct": true
-                },
-                {
-                    "text": "To create CSS styles automatically",
-                    "is_correct": false
-                },
-                {
-                    "text": "To replace all JavaScript functions",
-                    "is_correct": false
-                },
-                {
-                    "text": "To make every component render on the server",
-                    "is_correct": false
-                }
-            ]
+          "text": "useRef",
+          "is_correct": true
         },
         {
-            "framework": "react",
-            "competency_area": "state_management",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "What happens when a state setter returned by useState is called with a new value?",
-            "choices": [
-                {
-                    "text": "React schedules a re-render using the updated state",
-                    "is_correct": true
-                },
-                {
-                    "text": "The browser page is always fully reloaded",
-                    "is_correct": false
-                },
-                {
-                    "text": "The component is permanently unmounted",
-                    "is_correct": false
-                },
-                {
-                    "text": "The state change is ignored until the next application restart",
-                    "is_correct": false
-                }
-            ]
+          "text": "useState",
+          "is_correct": false
         },
         {
-            "framework": "react",
-            "competency_area": "rendering",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "Why are keys used when rendering a list of React elements?",
-            "choices": [
-                {
-                    "text": "They help React identify which list items changed between renders",
-                    "is_correct": true
-                },
-                {
-                    "text": "They encrypt the data used by each list item",
-                    "is_correct": false
-                },
-                {
-                    "text": "They prevent all list items from re-rendering",
-                    "is_correct": false
-                },
-                {
-                    "text": "They make list items globally accessible",
-                    "is_correct": false
-                }
-            ]
+          "text": "useMemo",
+          "is_correct": false
         },
         {
-            "framework": "react",
-            "competency_area": "performance",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "javascript",
-            "question_text": "Implement solve(input) where input is a JSON array of numbers. Return a JSON string containing the numbers that are greater than 10, preserving their original order.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[4,11,20,3,15]",
-                    "expected_output": "[11,20,15]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[10,10,-5]",
-                    "expected_output": "[]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "react",
-            "competency_area": "testing",
-            "modality": "coding",
-            "difficulty_tier": 3,
-            "language": "javascript",
-            "question_text": "Implement solve(input) where input is a JSON object with a count number. Return the string 'visible' when count is greater than zero, otherwise return 'empty'.",
-            "test_cases": [
-                {
-                    "input": "{\"count\":0}",
-                    "expected_output": "empty",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"count\":3}",
-                    "expected_output": "visible",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"count\":-1}",
-                    "expected_output": "empty",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "react",
-            "competency_area": "state_management",
-            "modality": "find_issues",
-            "difficulty_tier": 3,
-            "language": "javascript",
-            "question_text": "Implement solve(input) and fix the bug in the following state-update logic. The input is a JSON object containing count. The intended result is count increased by 2. Buggy code: function update(count) { let state = count; state = state + 1; state = count + 1; return state; }",
-            "test_cases": [
-                {
-                    "input": "{\"count\":0}",
-                    "expected_output": "2",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"count\":5}",
-                    "expected_output": "7",
-                    "is_hidden": true
-                },
-                {
-                    "input": "{\"count\":-3}",
-                    "expected_output": "-1",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "react",
-            "competency_area": "hooks",
-            "modality": "scenario",
-            "difficulty_tier": 2,
-            "question_text": "A component fetches user data inside an effect whenever userId changes. After navigating quickly between users, an older request sometimes updates the UI after a newer request. How would you change the component to prevent stale responses from updating the state?",
-            "reference_answer": {
-                "text": "The component should ensure that only the request associated with the current userId can update state. A cleanup function can mark the request as inactive, or an AbortController can cancel the previous request when the dependency changes.",
-                "rubric_points": [
-                    "Identifies that overlapping requests can resolve out of order",
-                    "Uses effect cleanup or request cancellation",
-                    "Prevents stale responses from updating component state",
-                    "Keeps userId in the effect dependency list"
-                ]
-            }
-        },
-        {
-            "framework": "react",
-            "competency_area": "performance",
-            "modality": "scenario",
-            "difficulty_tier": 3,
-            "question_text": "A dashboard contains a large table and a search input. Every keystroke causes the entire table to become noticeably slow. What would you investigate and what React-level changes would you consider?",
-            "reference_answer": {
-                "text": "I would profile the component tree to identify expensive renders. Depending on the findings, I would consider memoizing stable row components, avoiding unnecessary object and callback recreation, debouncing or deferring search updates, and virtualizing a very large list.",
-                "rubric_points": [
-                    "Mentions profiling before applying optimizations",
-                    "Identifies unnecessary table or row re-renders as a possible bottleneck",
-                    "Mentions memoization or stable props where appropriate",
-                    "Considers debouncing, deferred updates, or virtualization for large datasets"
-                ]
-            }
-        },
-        {
-            "framework": "react",
-            "competency_area": "rendering",
-            "modality": "defend",
-            "difficulty_tier": 3,
-            "question_text": "A teammate proposes storing every derived value from props in React state so that the component can access it easily. Defend or challenge this approach with concrete reasoning.",
-            "reference_answer": {
-                "text": "Derived values generally should not be duplicated in state because duplicated state can become inconsistent with the source props. Compute inexpensive derived values during rendering, and use memoization only when the computation is demonstrably expensive.",
-                "rubric_points": [
-                    "Identifies duplicated derived state as a source of inconsistency",
-                    "Recommends deriving simple values during render",
-                    "Uses memoization only when there is a meaningful performance reason",
-                    "Explains that props should remain the source of truth when appropriate"
-                ]
-            }
-        },
-        {
-            "framework": "react",
-            "competency_area": "hooks",
-            "modality": "explain",
-            "difficulty_tier": 2,
-            "question_text": "Explain why React Hooks must be called at the top level of a component or custom Hook rather than inside loops or conditional branches.",
-            "reference_answer": {
-                "text": "React associates Hook state with the order in which Hooks are called. Calling Hooks conditionally or inside loops can change that order between renders, causing React to associate state and effects with the wrong Hook.",
-                "rubric_points": [
-                    "Explains that Hook identity depends on call order",
-                    "Explains that conditional calls can change Hook order between renders",
-                    "Connects inconsistent order to incorrect state or effect association"
-                ]
-            }
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "routing",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "In Next.js App Router, which directory convention is used to define a route segment?",
-            "choices": [
-                {
-                    "text": "A folder inside the app directory",
-                    "is_correct": true
-                },
-                {
-                    "text": "A CSS file inside the public directory",
-                    "is_correct": false
-                },
-                {
-                    "text": "An environment variable",
-                    "is_correct": false
-                },
-                {
-                    "text": "A package.json script",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "ssr_ssg",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is a key benefit of server rendering in a Next.js application?",
-            "choices": [
-                {
-                    "text": "HTML can be generated on the server before being sent to the browser",
-                    "is_correct": true
-                },
-                {
-                    "text": "All JavaScript is permanently removed from the application",
-                    "is_correct": false
-                },
-                {
-                    "text": "Every request is automatically cached forever",
-                    "is_correct": false
-                },
-                {
-                    "text": "The application no longer needs a backend",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "middleware",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is a common use case for Next.js middleware?",
-            "choices": [
-                {
-                    "text": "Applying request-time logic such as redirects or access checks before a route is handled",
-                    "is_correct": true
-                },
-                {
-                    "text": "Defining database tables",
-                    "is_correct": false
-                },
-                {
-                    "text": "Compiling TypeScript manually in production",
-                    "is_correct": false
-                },
-                {
-                    "text": "Replacing React components with CSS",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "routing",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "javascript",
-            "question_text": "Implement solve(input) where input is a JSON array of URL path strings. Return a JSON array containing only paths that start with '/admin'.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[\"/\",\"/admin\",\"/users\",\"/admin/settings\"]",
-                    "expected_output": "[\"/admin\",\"/admin/settings\"]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[\"/administrator\",\"/admin-panel\"]",
-                    "expected_output": "[\"/administrator\",\"/admin-panel\"]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "data_fetching",
-            "modality": "coding",
-            "difficulty_tier": 3,
-            "language": "javascript",
-            "question_text": "Implement solve(input) where input is a JSON object containing an array named items. Return the JSON string of the items sorted by their numeric price in ascending order.",
-            "test_cases": [
-                {
-                    "input": "{\"items\":[]}",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"items\":[{\"name\":\"B\",\"price\":20},{\"name\":\"A\",\"price\":10}]}",
-                    "expected_output": "[{\"name\":\"A\",\"price\":10},{\"name\":\"B\",\"price\":20}]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"items\":[{\"name\":\"X\",\"price\":5},{\"name\":\"Y\",\"price\":5},{\"name\":\"Z\",\"price\":1}]}",
-                    "expected_output": "[{\"name\":\"Z\",\"price\":1},{\"name\":\"X\",\"price\":5},{\"name\":\"Y\",\"price\":5}]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "data_fetching",
-            "modality": "find_issues",
-            "difficulty_tier": 3,
-            "language": "javascript",
-            "question_text": "Implement solve(input) and fix the bug in this data transformation. The input is a JSON array of objects with a name field. The intended result is a JSON array of names. Buggy code: function getNames(items) { return items.map(item => item.name).join(','); }",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"name\":\"A\"},{\"name\":\"B\"}]",
-                    "expected_output": "[\"A\",\"B\"]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"name\":\"Next\"}]",
-                    "expected_output": "[\"Next\"]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "ssr_ssg",
-            "modality": "scenario",
-            "difficulty_tier": 2,
-            "question_text": "A product catalog is mostly static, but product prices can change periodically. The team wants fast page loads and does not want to rebuild the entire site for every price change. How would you approach rendering and data freshness?",
-            "reference_answer": {
-                "text": "The catalog can use statically generated or cached pages with a controlled revalidation strategy. Product data can be refreshed periodically rather than requiring a full deployment for each price update.",
-                "rubric_points": [
-                    "Recognizes that the catalog does not require per-request rendering",
-                    "Proposes static generation or caching",
-                    "Uses a revalidation or equivalent freshness strategy",
-                    "Balances page performance against acceptable price staleness"
-                ]
-            }
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "middleware",
-            "modality": "scenario",
-            "difficulty_tier": 3,
-            "question_text": "Your application has protected dashboard routes and public marketing routes. Authentication is handled with a session cookie. Where would you place the initial access check and what limitations would you consider?",
-            "reference_answer": {
-                "text": "Middleware can perform an early check for protected route patterns and redirect unauthenticated users. It should not be treated as the only authorization boundary; sensitive authorization should also be enforced by the server-side data or API layer.",
-                "rubric_points": [
-                    "Uses middleware for an early route-level authentication check",
-                    "Limits middleware matching to protected routes",
-                    "Recognizes that middleware is not the sole authorization boundary",
-                    "Requires server-side authorization for protected data or operations"
-                ]
-            }
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "deployment",
-            "modality": "defend",
-            "difficulty_tier": 3,
-            "question_text": "A team wants to expose a private API credential through a client-side environment variable because the frontend needs to call a third-party service. Defend or challenge this design.",
-            "reference_answer": {
-                "text": "A secret credential must not be exposed to browser JavaScript because users can inspect client-side code and network requests. The application should keep the secret on the server and have the client call a controlled server-side endpoint.",
-                "rubric_points": [
-                    "Identifies that client-exposed environment variables are visible to users",
-                    "Explains that private credentials must remain server-side",
-                    "Proposes a server-side endpoint or equivalent proxy",
-                    "Distinguishes public configuration from secrets"
-                ]
-            }
-        },
-        {
-            "framework": "nextjs",
-            "competency_area": "routing",
-            "modality": "explain",
-            "difficulty_tier": 2,
-            "question_text": "Explain the difference between a dynamic route segment and a static route in a Next.js App Router application.",
-            "reference_answer": {
-                "text": "A static route has a fixed path segment, while a dynamic segment uses a parameterized folder such as [id] so that multiple URL values can map to the same route implementation.",
-                "rubric_points": [
-                    "Defines static routes as fixed URL paths",
-                    "Defines dynamic segments as parameterized paths",
-                    "Provides an example such as [id]",
-                    "Explains that one dynamic route can handle multiple parameter values"
-                ]
-            }
-        },
-        {
-            "framework": "django",
-            "competency_area": "models_orm",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "What is the primary purpose of a Django model?",
-            "choices": [
-                {
-                    "text": "To represent application data and its database structure using Python classes",
-                    "is_correct": true
-                },
-                {
-                    "text": "To define browser CSS rules",
-                    "is_correct": false
-                },
-                {
-                    "text": "To configure DNS records",
-                    "is_correct": false
-                },
-                {
-                    "text": "To replace HTTP requests with WebSockets",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "views_api",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is a common responsibility of a Django view?",
-            "choices": [
-                {
-                    "text": "Receive a request, perform application logic, and return a response",
-                    "is_correct": true
-                },
-                {
-                    "text": "Compile Python into machine code before every request",
-                    "is_correct": false
-                },
-                {
-                    "text": "Define the physical server network topology",
-                    "is_correct": false
-                },
-                {
-                    "text": "Store browser cookies directly in the database schema",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "auth",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is the purpose of Django's authentication system?",
-            "choices": [
-                {
-                    "text": "To provide mechanisms for users, passwords, authentication, and permissions",
-                    "is_correct": true
-                },
-                {
-                    "text": "To automatically optimize every database query",
-                    "is_correct": false
-                },
-                {
-                    "text": "To replace the application's URL routing",
-                    "is_correct": false
-                },
-                {
-                    "text": "To generate frontend React components",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "models_orm",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "python",
-            "question_text": "Implement solve(input) where input is a JSON array of numbers. Return the sum of all even numbers.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "0",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[1,2,3,4,6]",
-                    "expected_output": "12",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[-4,-3,-2]",
-                    "expected_output": "-6",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "views_api",
-            "modality": "coding",
-            "difficulty_tier": 3,
-            "language": "python",
-            "question_text": "Implement solve(input) where input is a JSON object containing an array named users. Return a JSON array containing the names of users whose active field is true.",
-            "test_cases": [
-                {
-                    "input": "{\"users\":[]}",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"users\":[{\"name\":\"A\",\"active\":true},{\"name\":\"B\",\"active\":false}]}",
-                    "expected_output": "[\"A\"]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"users\":[{\"name\":\"X\",\"active\":false},{\"name\":\"Y\",\"active\":true},{\"name\":\"Z\",\"active\":true}]}",
-                    "expected_output": "[\"Y\",\"Z\"]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "models_orm",
-            "modality": "find_issues",
-            "difficulty_tier": 3,
-            "language": "python",
-            "question_text": "Implement solve(input) and fix the bug in this filtering logic. The input is a JSON array of product objects with a price field. The intended result is the JSON array of products whose price is at least 100. Buggy code: def filter_products(products): return [p for p in products if p['price'] > 100]",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"name\":\"A\",\"price\":100},{\"name\":\"B\",\"price\":150}]",
-                    "expected_output": "[{\"name\":\"A\",\"price\":100},{\"name\":\"B\",\"price\":150}]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"name\":\"X\",\"price\":99},{\"name\":\"Y\",\"price\":101}]",
-                    "expected_output": "[{\"name\":\"Y\",\"price\":101}]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "django",
-            "competency_area": "models_orm",
-            "modality": "scenario",
-            "difficulty_tier": 3,
-            "question_text": "An API endpoint lists 100 orders, and each order displays the customer's name. Profiling shows many database queries are executed. How would you investigate and improve the ORM usage?",
-            "reference_answer": {
-                "text": "The likely issue is an N+1 query pattern when accessing each order's related customer. The query should use select_related for a foreign key or one-to-one relationship, and the resulting query count should be measured to confirm the improvement.",
-                "rubric_points": [
-                    "Identifies a possible N+1 query pattern",
-                    "Uses select_related for a foreign key or one-to-one relationship",
-                    "Mentions measuring query count before and after the change",
-                    "Avoids blindly adding eager loading without considering relationship type and data size"
-                ]
-            }
-        },
-        {
-            "framework": "django",
-            "competency_area": "auth",
-            "modality": "scenario",
-            "difficulty_tier": 2,
-            "question_text": "A Django API allows authenticated users to retrieve order details by ID. Users can currently change the ID in the URL and retrieve another user's order. How would you fix the authorization issue?",
-            "reference_answer": {
-                "text": "Authentication only proves who the user is; the view must also authorize access to the specific order. The query should restrict the order to the current user or explicitly check ownership before returning it.",
-                "rubric_points": [
-                    "Distinguishes authentication from authorization",
-                    "Restricts the order query using the authenticated user",
-                    "Prevents users from accessing another user's order by changing the ID",
-                    "Returns an appropriate authorization or not-found response"
-                ]
-            }
-        },
-        {
-            "framework": "django",
-            "competency_area": "middleware",
-            "modality": "defend",
-            "difficulty_tier": 3,
-            "question_text": "A teammate wants to put all business logic for an order API inside Django middleware because middleware runs for every request. Defend or challenge this design.",
-            "reference_answer": {
-                "text": "Middleware is appropriate for cross-cutting request or response concerns such as authentication-related processing, logging, or headers, but order-specific business rules belong in views, services, or domain logic. Putting business logic in middleware makes request flow harder to reason about and test.",
-                "rubric_points": [
-                    "Distinguishes cross-cutting concerns from domain business logic",
-                    "Explains that middleware runs broadly across requests",
-                    "Places order-specific logic in views, services, or domain-layer code",
-                    "Identifies maintainability or testability problems with the proposed design"
-                ]
-            }
-        },
-        {
-            "framework": "django",
-            "competency_area": "testing",
-            "modality": "explain",
-            "difficulty_tier": 2,
-            "question_text": "Explain why Django applications should test both successful API requests and important failure cases.",
-            "reference_answer": {
-                "text": "Testing only successful requests leaves important behavior unverified. API tests should cover validation failures, authentication or authorization failures, missing resources, and other expected error responses so that the API contract remains reliable.",
-                "rubric_points": [
-                    "Explains the limitation of testing only happy paths",
-                    "Mentions validation or malformed input cases",
-                    "Mentions authentication or authorization failures",
-                    "Mentions missing-resource or other expected error responses"
-                ]
-            }
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "routing",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "What does a FastAPI path operation function represent?",
-            "choices": [
-                {
-                    "text": "The Python function that handles a particular HTTP method and path",
-                    "is_correct": true
-                },
-                {
-                    "text": "A database table definition",
-                    "is_correct": false
-                },
-                {
-                    "text": "A frontend CSS component",
-                    "is_correct": false
-                },
-                {
-                    "text": "A Docker image definition",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "validation",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is a primary benefit of using Pydantic models with FastAPI?",
-            "choices": [
-                {
-                    "text": "They provide structured request validation and data parsing",
-                    "is_correct": true
-                },
-                {
-                    "text": "They automatically create frontend pages",
-                    "is_correct": false
-                },
-                {
-                    "text": "They eliminate the need for HTTP status codes",
-                    "is_correct": false
-                },
-                {
-                    "text": "They make all database operations asynchronous",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "dependencies",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is a common purpose of FastAPI dependency injection?",
-            "choices": [
-                {
-                    "text": "To provide reusable request-scoped or shared logic such as authentication and database sessions",
-                    "is_correct": true
-                },
-                {
-                    "text": "To replace Python's import system",
-                    "is_correct": false
-                },
-                {
-                    "text": "To automatically compile all Python code to JavaScript",
-                    "is_correct": false
-                },
-                {
-                    "text": "To disable request validation",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "routing",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "python",
-            "question_text": "Implement solve(input) where input is a JSON object containing name and age. Return 'adult' when age is at least 18, otherwise return 'minor'.",
-            "test_cases": [
-                {
-                    "input": "{\"name\":\"A\",\"age\":17}",
-                    "expected_output": "minor",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"name\":\"B\",\"age\":18}",
-                    "expected_output": "adult",
-                    "is_hidden": false
-                },
-                {
-                    "input": "{\"name\":\"C\",\"age\":0}",
-                    "expected_output": "minor",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "validation",
-            "modality": "coding",
-            "difficulty_tier": 3,
-            "language": "python",
-            "question_text": "Implement solve(input) where input is a JSON array of objects with an email field. Return a JSON array containing only objects whose email contains exactly one '@' character.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"email\":\"a@example.com\"},{\"email\":\"invalid\"},{\"email\":\"b@test.org\"}]",
-                    "expected_output": "[{\"email\":\"a@example.com\"},{\"email\":\"b@test.org\"}]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[{\"email\":\"a@@example.com\"},{\"email\":\"@test.com\"}]",
-                    "expected_output": "[{\"email\":\"@test.com\"}]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "dependencies",
-            "modality": "find_issues",
-            "difficulty_tier": 3,
-            "language": "python",
-            "question_text": "Implement solve(input) and fix the bug in this validation logic. The input is a JSON array of numbers. The intended result is the JSON array of positive numbers. Buggy code: def positive_numbers(values): return [value for value in values if value < 0]",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[-2,0,3,5]",
-                    "expected_output": "[3,5]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[-5,-1]",
-                    "expected_output": "[]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "async",
-            "modality": "scenario",
-            "difficulty_tier": 3,
-            "question_text": "A FastAPI endpoint is declared async but calls a blocking database driver directly. Under load, request latency increases significantly. How would you diagnose and address the issue?",
-            "reference_answer": {
-                "text": "The blocking database operation can occupy the event-loop thread and prevent other asynchronous requests from progressing. The team should use an async-compatible database client where appropriate, or keep the endpoint synchronous or explicitly isolate blocking work in a threadpool.",
-                "rubric_points": [
-                    "Identifies blocking work inside the async execution path",
-                    "Connects blocking work to event-loop contention and increased latency",
-                    "Proposes an async-compatible database client where appropriate",
-                    "Provides a sync endpoint or threadpool approach for unavoidable blocking work"
-                ]
-            }
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "testing",
-            "modality": "scenario",
-            "difficulty_tier": 2,
-            "question_text": "A FastAPI endpoint depends on an external payment service, but unit tests are slow and fail whenever that service is unavailable. How would you redesign the tests?",
-            "reference_answer": {
-                "text": "The external payment dependency should be replaced with a controlled test double during unit tests. FastAPI dependency overrides can provide deterministic behavior, while a smaller set of integration tests can verify the real external interaction.",
-                "rubric_points": [
-                    "Separates unit tests from external integration tests",
-                    "Uses a mock, stub, or dependency override for the payment service",
-                    "Makes unit tests deterministic and independent of external availability",
-                    "Retains targeted integration coverage for the real service interaction"
-                ]
-            }
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "async",
-            "modality": "defend",
-            "difficulty_tier": 3,
-            "question_text": "A teammate argues that every FastAPI endpoint should be async because asynchronous endpoints are always faster. Defend or challenge this claim with concrete reasoning.",
-            "reference_answer": {
-                "text": "Async is valuable for concurrent non-blocking I/O, but it does not automatically make every operation faster. Blocking work inside an async endpoint can stall the event loop, while a normal synchronous endpoint can be appropriate for blocking libraries when the framework executes it safely outside the event loop.",
-                "rubric_points": [
-                    "Rejects the claim that async is universally faster",
-                    "Explains the benefit of async for concurrent non-blocking I/O",
-                    "Identifies the risk of blocking operations in async endpoints",
-                    "Explains when a synchronous endpoint can be appropriate"
-                ]
-            }
-        },
-        {
-            "framework": "fastapi",
-            "competency_area": "validation",
-            "modality": "explain",
-            "difficulty_tier": 2,
-            "question_text": "Explain how request validation improves the reliability of a FastAPI API.",
-            "reference_answer": {
-                "text": "Request validation checks incoming data against an explicit schema before application logic processes it. This prevents malformed values from reaching deeper layers and gives clients predictable validation errors.",
-                "rubric_points": [
-                    "Explains validation against an explicit schema",
-                    "Connects validation to preventing malformed data from reaching business logic",
-                    "Mentions predictable client-facing validation errors"
-                ]
-            }
-        },
-        {
-            "fundamentals": "javascript",
-            "competency_area": "closures",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "What is a closure in JavaScript?",
-            "choices": [
-                {
-                    "text": "A function that retains access to variables from its lexical scope",
-                    "is_correct": true
-                },
-                {
-                    "text": "A function that closes browser tabs",
-                    "is_correct": false
-                },
-                {
-                    "text": "A module that automatically closes network connections",
-                    "is_correct": false
-                },
-                {
-                    "text": "A syntax for ending a loop",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "javascript",
-            "competency_area": "async",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What does an async function return in JavaScript?",
-            "choices": [
-                {
-                    "text": "A Promise",
-                    "is_correct": true
-                },
-                {
-                    "text": "Always a plain string",
-                    "is_correct": false
-                },
-                {
-                    "text": "Only a callback function",
-                    "is_correct": false
-                },
-                {
-                    "text": "Always undefined",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "javascript",
-            "competency_area": "error_handling",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is the purpose of a finally block in JavaScript exception handling?",
-            "choices": [
-                {
-                    "text": "To run cleanup code regardless of whether an exception occurred",
-                    "is_correct": true
-                },
-                {
-                    "text": "To catch only network errors",
-                    "is_correct": false
-                },
-                {
-                    "text": "To prevent all exceptions from being thrown",
-                    "is_correct": false
-                },
-                {
-                    "text": "To retry every failed operation automatically",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "javascript",
-            "competency_area": "types",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "javascript",
-            "question_text": "Implement solve(input) where input is a JSON array of values. Return a JSON array containing only values whose JavaScript type is 'number'.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[1,\"2\",true,3,null]",
-                    "expected_output": "[1,3]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[0,-1,2.5,\"\",false]",
-                    "expected_output": "[0,-1,2.5]",
-                    "is_hidden": true
-                }
-            ]
-        },
-        {
-            "fundamentals": "python",
-            "competency_area": "data_structures",
-            "modality": "foundational",
-            "difficulty_tier": 1,
-            "question_text": "Which Python data structure stores key-value pairs?",
-            "choices": [
-                {
-                    "text": "Dictionary",
-                    "is_correct": true
-                },
-                {
-                    "text": "Tuple",
-                    "is_correct": false
-                },
-                {
-                    "text": "Set",
-                    "is_correct": false
-                },
-                {
-                    "text": "String",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "python",
-            "competency_area": "oop",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What does inheritance allow a Python class to do?",
-            "choices": [
-                {
-                    "text": "Reuse or extend behavior defined by another class",
-                    "is_correct": true
-                },
-                {
-                    "text": "Convert every method into a global function",
-                    "is_correct": false
-                },
-                {
-                    "text": "Prevent objects from having attributes",
-                    "is_correct": false
-                },
-                {
-                    "text": "Automatically serialize all objects to JSON",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "python",
-            "competency_area": "typing",
-            "modality": "foundational",
-            "difficulty_tier": 2,
-            "question_text": "What is the primary purpose of Python type hints?",
-            "choices": [
-                {
-                    "text": "To communicate expected types and enable static analysis tools",
-                    "is_correct": true
-                },
-                {
-                    "text": "To force the Python interpreter to reject every runtime type mismatch",
-                    "is_correct": false
-                },
-                {
-                    "text": "To replace all unit tests",
-                    "is_correct": false
-                },
-                {
-                    "text": "To automatically optimize every function",
-                    "is_correct": false
-                }
-            ]
-        },
-        {
-            "fundamentals": "python",
-            "competency_area": "data_structures",
-            "modality": "coding",
-            "difficulty_tier": 2,
-            "language": "python",
-            "question_text": "Implement solve(input) where input is a JSON array of strings. Return a JSON array containing the strings with length greater than 3, preserving their original order.",
-            "test_cases": [
-                {
-                    "input": "[]",
-                    "expected_output": "[]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[\"cat\",\"python\",\"code\",\"hello\"]",
-                    "expected_output": "[\"python\",\"code\",\"hello\"]",
-                    "is_hidden": false
-                },
-                {
-                    "input": "[\"\",\"abc\",\"abcd\"]",
-                    "expected_output": "[\"abcd\"]",
-                    "is_hidden": true
-                }
-            ]
+          "text": "useCallback",
+          "is_correct": false
         }
-    ]
+      ]
+    },
+    {
+      "framework": "react",
+      "modality": "coding",
+      "competency_area": "state_management",
+      "difficulty_tier": 2,
+      "question_text": "This models the reducer function you'd plug into useReducer for a counter. Implement solve(input) in JavaScript. input is a JSON string representing an array of actions, each shaped like {\"type\": \"INCREMENT\"} | {\"type\": \"DECREMENT\"} | {\"type\": \"SET\", \"payload\": number}. Starting state is 0. Apply the actions in order and return the final numeric state as a JSON string (e.g. \"11\").",
+      "language": "javascript",
+      "test_cases": [
+        {
+          "input": "[{\"type\":\"INCREMENT\"},{\"type\":\"INCREMENT\"},{\"type\":\"DECREMENT\"}]",
+          "expected_output": "1",
+          "is_hidden": false
+        },
+        {
+          "input": "[{\"type\":\"SET\",\"payload\":10},{\"type\":\"INCREMENT\"}]",
+          "expected_output": "11",
+          "is_hidden": false
+        },
+        {
+          "input": "[]",
+          "expected_output": "0",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "react",
+      "modality": "find_issues",
+      "competency_area": "rendering",
+      "difficulty_tier": 2,
+      "question_text": "This shallowEqual function is meant to back a custom React.memo comparator, but it has a bug: it returns true for two objects that have different numbers of keys, as long as the keys they DO share match. Fix it and implement solve(input) in JavaScript. input is a JSON string array of exactly two objects. Return \"true\" or \"false\" (as a JSON string) indicating whether the objects are shallowly equal (same key count AND same key/value pairs at the top level).\n\nBuggy version:\nfunction shallowEqual(a, b) {\n  for (const key in a) {\n    if (a[key] !== b[key]) return false;\n  }\n  return true;\n}",
+      "language": "javascript",
+      "test_cases": [
+        {
+          "input": "[{\"a\":1,\"b\":2},{\"a\":1,\"b\":2,\"c\":3}]",
+          "expected_output": "false",
+          "is_hidden": false
+        },
+        {
+          "input": "[{\"a\":1},{\"a\":1}]",
+          "expected_output": "true",
+          "is_hidden": false
+        },
+        {
+          "input": "[{\"a\":1,\"b\":2},{\"a\":1,\"b\":3}]",
+          "expected_output": "false",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "react",
+      "modality": "diagnose",
+      "competency_area": "performance",
+      "difficulty_tier": 2,
+      "question_text": "A table component renders 500 rows via a <Row> child component. Every keystroke in an unrelated search input at the top of the page causes all 500 rows to re-render and visibly stutter, even though the row data hasn't changed. Diagnose the likely cause(s) and describe the fix.",
+      "reference_answer": {
+        "text": "The parent re-renders on every keystroke (state lives in the same component tree as the table), and each render creates new inline callback/object props (e.g. onClick={() => ...}) passed to Row, so even a memoized Row sees new prop references and re-renders anyway. Fix by wrapping Row in React.memo, stabilizing callbacks with useCallback and derived objects with useMemo, and/or lifting the search input's state so it doesn't force the table's parent to re-render, plus considering list virtualization for 500 rows.",
+        "rubric_points": [
+          "Identifies that unrelated state colocated with the table forces unnecessary re-renders of the whole subtree",
+          "Identifies inline function/object props breaking React.memo reference equality",
+          "Proposes React.memo + useCallback/useMemo and/or state colocation/virtualization as the fix"
+        ]
+      }
+    },
+    {
+      "framework": "react",
+      "modality": "scenario",
+      "competency_area": "testing",
+      "difficulty_tier": 2,
+      "question_text": "You're writing a test for a component that calls an API in a useEffect on mount, shows a spinner, then renders the fetched list. Walk through how you'd structure this test with React Testing Library, including how you handle the async gap between the spinner and final render.",
+      "reference_answer": {
+        "text": "Mock the network call (e.g. mock the fetch module or an injected client) so the test controls timing and data. Render the component, assert the loading state is present synchronously, then use findByText/findByRole or waitFor to assert the resolved UI, letting RTL handle awaiting the state update instead of manual setTimeout waits. Assert on user-visible output (list items rendered) rather than internal state or implementation details.",
+        "rubric_points": [
+          "Mocks the data-fetching dependency rather than hitting a real network",
+          "Uses findBy*/waitFor for the async assertion instead of arbitrary waits or act() misuse",
+          "Asserts on rendered output/behavior, not internal implementation details"
+        ]
+      }
+    },
+    {
+      "framework": "nextjs",
+      "modality": "find_issues",
+      "competency_area": "routing",
+      "difficulty_tier": 2,
+      "question_text": "This matchRoute function is meant to mimic Next.js dynamic route matching: a pattern segment like [id] matches exactly one path segment, and a catch-all segment like [...slug] matches one or more remaining path segments. It has a bug where catch-all segments fail to match anything beyond the first remaining segment. Fix it and implement solve(input) in JavaScript. input is a JSON string: {\"pattern\": string, \"path\": string}. Return \"true\" or \"false\" as a JSON string indicating whether path matches pattern.",
+      "language": "javascript",
+      "test_cases": [
+        {
+          "input": "{\"pattern\":\"/blog/[...slug]\",\"path\":\"/blog/2024/08/post\"}",
+          "expected_output": "true",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"pattern\":\"/blog/[id]\",\"path\":\"/blog/2024/08\"}",
+          "expected_output": "false",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"pattern\":\"/shop/[category]/[id]\",\"path\":\"/shop/shoes/42\"}",
+          "expected_output": "true",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "nextjs",
+      "modality": "foundational",
+      "competency_area": "ssr_ssg",
+      "difficulty_tier": 1,
+      "question_text": "In the Next.js App Router, which approach produces HTML at build time for a page with no per-request dynamic data, like a static marketing page?",
+      "choices": [
+        {
+          "text": "Static rendering (the default behavior for pages with no dynamic APIs/data access)",
+          "is_correct": true
+        },
+        {
+          "text": "Per-request server rendering triggered by cookies() or headers() usage",
+          "is_correct": false
+        },
+        {
+          "text": "Client-side fetching inside a useEffect in a client component",
+          "is_correct": false
+        },
+        {
+          "text": "Rendering entirely inside edge middleware",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "framework": "nextjs",
+      "modality": "scenario",
+      "competency_area": "data_fetching",
+      "difficulty_tier": 2,
+      "question_text": "A Next.js App Router page needs to display stock prices that should feel near-real-time (updating every few seconds) while still loading fast on first paint. Describe the data fetching strategy you'd use for the initial render and the live updates.",
+      "reference_answer": {
+        "text": "Server-render the initial page with a fast, cached or short-revalidate fetch (e.g. fetch with a short revalidate window or no-store if freshness matters more than cache hits) so the first paint has real data quickly. Layer live updates on top with a client component that polls an API route or subscribes via WebSocket/SSE after hydration, rather than trying to keep the whole page fully static or fully dynamic on every request.",
+        "rubric_points": [
+          "Server-renders initial content for fast first paint instead of pure client-side fetching",
+          "Recognizes full static generation is wrong fit for near-real-time data",
+          "Proposes client-side polling or WebSocket/SSE for ongoing updates after hydration"
+        ]
+      }
+    },
+    {
+      "framework": "nextjs",
+      "modality": "architect",
+      "competency_area": "middleware",
+      "difficulty_tier": 3,
+      "question_text": "Design an authentication gate for a Next.js app using edge middleware: certain routes should require a logged-in session, and you want to avoid hitting the database on every request just to check auth.",
+      "reference_answer": {
+        "text": "Store a signed session token (e.g. JWT) in an httpOnly cookie set at login. In middleware, verify the token's signature and expiry locally (no DB call) using a fast crypto check, and redirect to /login (preserving the original destination via a query param) if invalid or missing. Scope middleware to only the routes that need protection via the matcher config to avoid unnecessary overhead on public routes. Handle token refresh/expiry via a short-lived access token plus a refresh flow, keeping any DB-backed session revocation checks in the actual route handlers rather than middleware if strict revocation is required.",
+        "rubric_points": [
+          "Verifies a signed token locally in middleware instead of querying the DB per request",
+          "Scopes middleware via matcher config to avoid running on unrelated routes",
+          "Handles redirect-with-return-url and token expiry/refresh strategy"
+        ]
+      }
+    },
+    {
+      "framework": "nextjs",
+      "modality": "explain",
+      "competency_area": "deployment",
+      "difficulty_tier": 1,
+      "question_text": "Explain to a teammate what Incremental Static Regeneration (ISR) does, and when you'd reach for a revalidate time versus on-demand revalidation.\n  Keep it practical, not textbook.",
+      "reference_answer": {
+        "text": "ISR lets a statically generated page get regenerated in the background after it goes stale, instead of requiring a full site rebuild — visitors keep getting the old cached page until the new one finishes generating, then future requests get the fresh version. A time-based revalidate (e.g. revalidate: 60) fits content that goes stale predictably (a blog list). On-demand revalidation (triggering revalidation via an API call/webhook) fits content tied to explicit events, like a CMS publish action, where you want freshness immediately rather than waiting out a timer.",
+        "rubric_points": [
+          "Explains background regeneration without a full rebuild, serving stale-then-fresh",
+          "Distinguishes time-based revalidate from on-demand/webhook-triggered revalidation",
+          "Gives a concrete scenario for when each is the better fit"
+        ]
+      }
+    },
+    {
+      "framework": "django",
+      "modality": "coding",
+      "competency_area": "models_orm",
+      "difficulty_tier": 2,
+      "question_text": "This mimics Order.objects.filter(status='paid').aggregate(Sum('amount')). Implement solve(input) in Python. input is a JSON string: {\"records\": [{\"status\": str, \"amount\": number}, ...]}. Return the JSON string of the sum of 'amount' for records where status == 'paid' (return \"0\" if none match).",
+      "language": "python",
+      "test_cases": [
+        {
+          "input": "{\"records\":[{\"status\":\"paid\",\"amount\":100},{\"status\":\"pending\",\"amount\":50},{\"status\":\"paid\",\"amount\":25}]}",
+          "expected_output": "125",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"records\":[{\"status\":\"pending\",\"amount\":50}]}",
+          "expected_output": "0",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"records\":[]}",
+          "expected_output": "0",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "django",
+      "modality": "find_issues",
+      "competency_area": "views_api",
+      "difficulty_tier": 2,
+      "question_text": "This permission check is meant to allow access only if the user is active AND (staff OR the object owner), but an operator precedence bug lets some inactive users through / denies valid staff. Fix it and implement solve(input) in Python. input is a JSON string: {\"is_staff\": bool, \"is_owner\": bool, \"is_active\": bool}. Return \"true\" or \"false\" as a JSON string for: is_active AND (is_staff OR is_owner).\n\nBuggy version:\ndef has_permission(is_staff, is_owner, is_active):\n    return is_active and is_staff or is_owner",
+      "language": "python",
+      "test_cases": [
+        {
+          "input": "{\"is_staff\":true,\"is_owner\":false,\"is_active\":true}",
+          "expected_output": "true",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"is_staff\":false,\"is_owner\":true,\"is_active\":false}",
+          "expected_output": "false",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"is_staff\":false,\"is_owner\":false,\"is_active\":true}",
+          "expected_output": "false",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "django",
+      "modality": "foundational",
+      "competency_area": "auth",
+      "difficulty_tier": 1,
+      "question_text": "When you call user.set_password('mypassword') on Django's built-in User model, what determines how the password is hashed and salted before being stored?",
+      "choices": [
+        {
+          "text": "The PASSWORD_HASHERS setting",
+          "is_correct": true
+        },
+        {
+          "text": "The SECRET_KEY setting",
+          "is_correct": false
+        },
+        {
+          "text": "The AUTH_USER_MODEL setting",
+          "is_correct": false
+        },
+        {
+          "text": "The CSRF_TRUSTED_ORIGINS setting",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "framework": "django",
+      "modality": "defend",
+      "competency_area": "middleware",
+      "difficulty_tier": 2,
+      "question_text": "A teammate proposes moving expensive shipping-cost calculation logic into a custom Django middleware so it 'runs consistently for every request.' Push back on or defend this design choice.",
+      "reference_answer": {
+        "text": "Push back: middleware runs on every request matching its scope regardless of whether that request actually needs shipping calculation, so this wastes CPU on unrelated requests (static asset requests, unrelated API calls, admin pages) and makes an expensive, request-specific computation a global cost. Middleware is meant for cross-cutting concerns (auth, logging, CORS, request/response transformation), not business logic tied to a specific feature. The calculation belongs in the view/service layer where it's only invoked when actually needed, with normal caching applied there instead.",
+        "rubric_points": [
+          "Recognizes middleware executes for every matching request, not just relevant ones",
+          "Distinguishes cross-cutting concerns (middleware's job) from feature-specific business logic",
+          "Recommends the view/service layer as the correct place for the calculation"
+        ]
+      }
+    },
+    {
+      "framework": "django",
+      "modality": "diagnose",
+      "competency_area": "testing",
+      "difficulty_tier": 2,
+      "question_text": "Your Django test suite passes locally but intermittently fails in CI with unique-constraint violations or 'database is locked' errors when tests run in parallel. Diagnose the likely causes.",
+      "reference_answer": {
+        "text": "Likely causes: tests aren't properly isolated in their own transactions (e.g. using TransactionTestCase where plain TestCase's atomic rollback would have sufficed), shared fixture data or hardcoded IDs/unique fields colliding across parallel workers, or parallel workers sharing a single SQLite file which serializes/locks writes. Fix by preferring TestCase's per-test transaction rollback over TransactionTestCase unless truly needed, using factories with randomized/sequenced unique values instead of hardcoded ones, and ensuring each parallel worker gets its own test database.",
+        "rubric_points": [
+          "Identifies improper test isolation (TransactionTestCase vs TestCase rollback) as a cause",
+          "Identifies fixture/unique-field collisions across parallel test runs",
+          "Identifies shared database file/connection contention under parallel workers"
+        ]
+      }
+    },
+    {
+      "framework": "fastapi",
+      "modality": "coding",
+      "competency_area": "routing",
+      "difficulty_tier": 2,
+      "question_text": "This models FastAPI path parameter validation for a route like @app.get('/items/{item_id}') where item_id: int = Path(gt=0). Implement solve(input) in Python. input is a JSON string: {\"path\": string}. Return \"true\" if path matches the pattern '/items/{item_id}' where item_id is a positive integer, else \"false\".",
+      "language": "python",
+      "test_cases": [
+        {
+          "input": "{\"path\":\"/items/42\"}",
+          "expected_output": "true",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"path\":\"/items/-3\"}",
+          "expected_output": "false",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"path\":\"/items/abc\"}",
+          "expected_output": "false",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "framework": "fastapi",
+      "modality": "foundational",
+      "competency_area": "dependencies",
+      "difficulty_tier": 1,
+      "question_text": "What's the main practical benefit of injecting a database session into a path operation via Depends() instead of creating the session inline inside the function body?",
+      "choices": [
+        {
+          "text": "It centralizes session lifecycle management and lets you override the dependency in tests without touching the endpoint code",
+          "is_correct": true
+        },
+        {
+          "text": "It makes the endpoint execute faster at runtime",
+          "is_correct": false
+        },
+        {
+          "text": "It's required for the endpoint to be declared async",
+          "is_correct": false
+        },
+        {
+          "text": "It automatically adds authentication to the route",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "framework": "fastapi",
+      "modality": "scenario",
+      "competency_area": "validation",
+      "difficulty_tier": 2,
+      "question_text": "An endpoint accepts a nested JSON payload for creating an order with a list of line items, and malformed input should return clear, field-level 422 errors. Describe how you'd model this with Pydantic.",
+      "reference_answer": {
+        "text": "Define nested BaseModel classes (e.g. LineItem with sku: str, quantity: conint(gt=0), unit_price: confloat(gt=0), and OrderCreate with customer_id: int and items: List[LineItem] with a min_items constraint). FastAPI automatically returns a 422 with per-field error paths when validation fails, without extra code. Add custom validators (@field_validator/@model_validator) for cross-field rules, like ensuring items isn't empty or totals are consistent.",
+        "rubric_points": [
+          "Uses nested Pydantic models to represent the nested payload structure",
+          "Applies field-level constraints (conint/confloat/min_items etc.) rather than manual checks",
+          "Mentions FastAPI's automatic 422 field-level error response and/or custom validators for cross-field rules"
+        ]
+      }
+    },
+    {
+      "framework": "fastapi",
+      "modality": "architect",
+      "competency_area": "async",
+      "difficulty_tier": 3,
+      "question_text": "A FastAPI endpoint needs to call three independent external APIs and combine the results before responding. Design this endpoint for minimal latency.",
+      "reference_answer": {
+        "text": "Declare the endpoint as async def and use an async HTTP client (e.g. httpx.AsyncClient) to issue all three calls concurrently with asyncio.gather instead of awaiting them sequentially. Reuse a single client instance (e.g. via app lifespan/dependency) for connection pooling instead of creating a new client per request. Set per-call timeouts and handle partial failures (e.g. one API failing shouldn't necessarily fail the whole response if a partial result is acceptable). Avoid calling blocking/sync IO libraries inside the async def, since that would block the event loop and negate the concurrency benefit.",
+        "rubric_points": [
+          "Uses asyncio.gather (or equivalent) to run the three calls concurrently rather than sequentially",
+          "Reuses a pooled async client instead of creating one per request",
+          "Flags the risk of blocking sync calls inside an async endpoint stalling the event loop"
+        ]
+      }
+    },
+    {
+      "framework": "fastapi",
+      "modality": "communicate",
+      "competency_area": "testing",
+      "difficulty_tier": 2,
+      "question_text": "Write a short code-review comment explaining to a junior developer why they should use FastAPI's TestClient with app.dependency_overrides instead of monkeypatching the database module directly to test an endpoint.",
+      "reference_answer": {
+        "text": "Something like: 'Instead of monkeypatching the db module globally, use app.dependency_overrides[get_db] = override_get_db for this test. It's scoped to the dependency FastAPI actually injects, so you're testing through the real dependency graph instead of a global patch that can leak into other tests or hide import-order bugs. It's also trivial to reset between tests (dependency_overrides.clear()), which keeps tests independent.'",
+        "rubric_points": [
+          "Explains dependency_overrides targets the actual injected dependency rather than a global patch",
+          "Notes the risk of monkeypatch leaking state or being import-order sensitive",
+          "Mentions ease of resetting/scoping overrides per test for isolation"
+        ]
+      }
+    },
+    {
+      "framework": "postgresql",
+      "modality": "foundational",
+      "competency_area": "indexing",
+      "difficulty_tier": 1,
+      "question_text": "A table has 10 million rows and you run frequent WHERE email = ? lookups with no index on email. What should you expect?",
+      "choices": [
+        {
+          "text": "A sequential scan of the entire table for each lookup",
+          "is_correct": true
+        },
+        {
+          "text": "Postgres auto-creates an index the first time the query runs",
+          "is_correct": false
+        },
+        {
+          "text": "Constant-time lookup regardless of table size",
+          "is_correct": false
+        },
+        {
+          "text": "The planner refuses to run the query without an index",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "framework": "postgresql",
+      "modality": "foundational",
+      "competency_area": "joins",
+      "difficulty_tier": 2,
+      "question_text": "Which join returns all rows from the left table plus matched rows from the right table, filling in NULLs where there's no match on the right?",
+      "choices": [
+        {
+          "text": "LEFT OUTER JOIN",
+          "is_correct": true
+        },
+        {
+          "text": "INNER JOIN",
+          "is_correct": false
+        },
+        {
+          "text": "CROSS JOIN",
+          "is_correct": false
+        },
+        {
+          "text": "RIGHT OUTER JOIN",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "framework": "postgresql",
+      "modality": "diagnose",
+      "competency_area": "transactions",
+      "difficulty_tier": 2,
+      "question_text": "Two concurrent transactions each SELECT a product's stock count, then separately decrement and write it back. Under load, this results in overselling — the stock count ends up higher than it should after both transactions commit. Diagnose the issue and propose a fix.",
+      "reference_answer": {
+        "text": "This is a classic lost-update race: both transactions read the same stale stock value before either writes, so the second write overwrites the first decrement instead of compounding it. Fix by locking the row for the duration of the read-modify-write with SELECT ... FOR UPDATE, or better, avoid the read-then-write pattern entirely with an atomic UPDATE products SET stock = stock - 1 WHERE id = ? AND stock >= 1, checking the affected row count to detect insufficient stock.",
+        "rubric_points": [
+          "Identifies the lost-update race between concurrent read-then-write operations",
+          "Proposes row locking (SELECT ... FOR UPDATE) or an atomic single-statement UPDATE as the fix",
+          "Mentions checking the result (rows affected / stock >= threshold) to detect insufficient stock"
+        ]
+      }
+    },
+    {
+      "framework": "postgresql",
+      "modality": "architect",
+      "competency_area": "query_plans",
+      "difficulty_tier": 3,
+      "question_text": "A reporting query joining 4 large tables and aggregating results takes 40 seconds. EXPLAIN ANALYZE shows sequential scans on the large tables feeding into nested loop joins. Design an approach to speed this up.",
+      "reference_answer": {
+        "text": "Check that filter and join columns have appropriate indexes (the seq scans suggest they don't, or statistics are stale so the planner isn't using them). Run ANALYZE to refresh planner statistics if they're out of date. Once indexed, nested loops on smaller filtered sets are fine, but for genuinely large joins consider whether a hash join would be more appropriate (often means increasing work_mem so it doesn't spill to disk). For a recurring report, consider a materialized view refreshed on a schedule, or table partitioning if the large tables are naturally partitionable (e.g. by date), rather than re-computing the full join every time.",
+        "rubric_points": [
+          "Investigates missing indexes on join/filter columns and stale statistics as root causes",
+          "Considers work_mem/hash join tuning for large aggregations",
+          "Proposes materialized views or partitioning for a recurring expensive report"
+        ]
+      }
+    },
+    {
+      "framework": "postgresql",
+      "modality": "explain",
+      "competency_area": "constraints",
+      "difficulty_tier": 1,
+      "question_text": "Explain the difference between a UNIQUE constraint and a plain UNIQUE index in Postgres, and why you might explicitly add the constraint even though it creates an index under the hood anyway.",
+      "reference_answer": {
+        "text": "A UNIQUE constraint is a schema-level integrity rule that Postgres implements internally using a unique index — so functionally, uniqueness is enforced either way. The reason to declare it as a constraint (not just an index) is intent and tooling: constraints document the business rule explicitly in the schema, participate in features like ON CONFLICT ON CONSTRAINT, and in some contexts (like being the target of a foreign key) Postgres requires an actual unique constraint or primary key rather than just any unique index.",
+        "rubric_points": [
+          "Explains a unique constraint is backed by a unique index under the hood",
+          "Notes the constraint communicates schema-level intent versus a bare index",
+          "Mentions a practical difference like ON CONFLICT usage or foreign key target requirements"
+        ]
+      }
+    },
+    {
+      "fundamentals": "javascript",
+      "modality": "foundational",
+      "competency_area": "closures",
+      "difficulty_tier": 1,
+      "question_text": "What does this log?\nfor (var i = 0; i < 3; i++) { setTimeout(() => console.log(i), 0); }",
+      "choices": [
+        {
+          "text": "3 3 3",
+          "is_correct": true
+        },
+        {
+          "text": "0 1 2",
+          "is_correct": false
+        },
+        {
+          "text": "undefined undefined undefined",
+          "is_correct": false
+        },
+        {
+          "text": "0 0 0",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "javascript",
+      "modality": "coding",
+      "competency_area": "async",
+      "difficulty_tier": 2,
+      "question_text": "Implement solve(input) in JavaScript, modeling dependency resolution for a set of async build tasks (like awaiting Promise.all of dependencies before running a task). input is a JSON string array of objects {\"name\": string, \"dependsOn\": [string, ...]}. Return a valid JSON array (as a string) giving a valid execution order where every task appears after all of its dependencies. If the dependency graph has a cycle, return the string \"cycle\" instead. Test inputs are constructed so the correct order is unique.",
+      "language": "javascript",
+      "test_cases": [
+        {
+          "input": "[{\"name\":\"a\",\"dependsOn\":[]},{\"name\":\"b\",\"dependsOn\":[\"a\"]},{\"name\":\"c\",\"dependsOn\":[\"b\"]}]",
+          "expected_output": "[\"a\",\"b\",\"c\"]",
+          "is_hidden": false
+        },
+        {
+          "input": "[{\"name\":\"x\",\"dependsOn\":[\"y\"]},{\"name\":\"y\",\"dependsOn\":[\"x\"]}]",
+          "expected_output": "cycle",
+          "is_hidden": false
+        },
+        {
+          "input": "[{\"name\":\"a\",\"dependsOn\":[]}]",
+          "expected_output": "[\"a\"]",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "fundamentals": "javascript",
+      "modality": "foundational",
+      "competency_area": "types",
+      "difficulty_tier": 1,
+      "question_text": "What does typeof null return in JavaScript?",
+      "choices": [
+        {
+          "text": "'object'",
+          "is_correct": true
+        },
+        {
+          "text": "'null'",
+          "is_correct": false
+        },
+        {
+          "text": "'undefined'",
+          "is_correct": false
+        },
+        {
+          "text": "'symbol'",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "javascript",
+      "modality": "explain",
+      "competency_area": "error_handling",
+      "difficulty_tier": 2,
+      "question_text": "Explain to a teammate the difference between throwing inside an async function and rejecting the returned promise, and how try/catch interacts with await.",
+      "reference_answer": {
+        "text": "Throwing inside an async function is automatically converted into a rejected promise — there's no functional difference from explicitly returning Promise.reject(err) from the caller's perspective. When you await a rejected promise inside a try block, the rejection is re-thrown synchronously at that point in the async function, so a normal try/catch around the await catches it just like a sync throw. If you await outside a try/catch (or don't await/handle it at all), the rejection propagates as an unhandled promise rejection instead of being catchable locally.",
+        "rubric_points": [
+          "States that throwing inside async functions produces a rejected promise",
+          "Explains await re-throws a rejected promise synchronously so try/catch can catch it",
+          "Notes what happens when a rejection isn't awaited/caught (unhandled rejection)"
+        ]
+      }
+    },
+    {
+      "fundamentals": "javascript",
+      "modality": "communicate",
+      "competency_area": "modules",
+      "difficulty_tier": 2,
+      "question_text": "Write a short code-review comment explaining to a teammate why mixing CommonJS require() and ES module import/export in the same Node.js project is breaking their build, and how to fix it.",
+      "reference_answer": {
+        "text": "Something like: 'The build is failing because this file is being treated as CommonJS (no \"type\": \"module\" in package.json / .cjs extension) but you're using ESM import/export syntax in it, which Node can't parse under CommonJS rules. Either rename it to .mjs / set \"type\": \"module\" in package.json and convert any require() calls to import, or keep it CommonJS and switch back to require()/module.exports. Also watch for interop quirks — importing a CommonJS module from ESM sometimes needs .default depending on how it's exported.'",
+        "rubric_points": [
+          "Identifies the root cause as a module-system mismatch (file being parsed as CJS vs ESM)",
+          "Gives a concrete fix (package.json type field / file extension / consistent syntax)",
+          "Mentions CJS/ESM interop quirks (e.g. default export access) as a secondary point"
+        ]
+      }
+    },
+    {
+      "fundamentals": "python",
+      "modality": "foundational",
+      "competency_area": "data_structures",
+      "difficulty_tier": 1,
+      "question_text": "Which built-in Python data structure gives O(1) average-case membership testing (in) and disallows duplicate elements?",
+      "choices": [
+        {
+          "text": "set",
+          "is_correct": true
+        },
+        {
+          "text": "list",
+          "is_correct": false
+        },
+        {
+          "text": "tuple",
+          "is_correct": false
+        },
+        {
+          "text": "str",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "python",
+      "modality": "find_issues",
+      "competency_area": "oop",
+      "difficulty_tier": 2,
+      "question_text": "This class uses a mutable default argument, so every Cart instance that doesn't pass items ends up sharing the same underlying list, causing cross-instance state bugs. Fix it, then implement solve(input) in Python. input is a JSON string: {\"a\": [items to add to cart A], \"b\": [items to add to cart B]}. Create two separate Cart instances (no items passed to the constructor), add the given items to each, and return a JSON string of {\"a\": cart_a.items, \"b\": cart_b.items} proving the two carts are isolated.\n\nBuggy version:\nclass Cart:\n    def __init__(self, items=[]):\n        self.items = items\n    def add(self, item):\n        self.items.append(item)",
+      "language": "python",
+      "test_cases": [
+        {
+          "input": "{\"a\":[\"apple\"],\"b\":[\"banana\",\"pear\"]}",
+          "expected_output": "{\"a\": [\"apple\"], \"b\": [\"banana\", \"pear\"]}",
+          "is_hidden": false
+        },
+        {
+          "input": "{\"a\":[],\"b\":[\"kiwi\"]}",
+          "expected_output": "{\"a\": [], \"b\": [\"kiwi\"]}",
+          "is_hidden": true
+        }
+      ]
+    },
+    {
+      "fundamentals": "python",
+      "modality": "foundational",
+      "competency_area": "async",
+      "difficulty_tier": 1,
+      "question_text": "What does `await asyncio.gather(coro1(), coro2())` do?",
+      "choices": [
+        {
+          "text": "Runs both coroutines concurrently and waits for both to complete, returning their results as a list",
+          "is_correct": true
+        },
+        {
+          "text": "Runs coro1 to completion, then starts coro2",
+          "is_correct": false
+        },
+        {
+          "text": "Automatically cancels coro2 if coro1 raises an exception",
+          "is_correct": false
+        },
+        {
+          "text": "Blocks the entire event loop until coro1 finishes, ignoring coro2",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "python",
+      "modality": "scenario",
+      "competency_area": "typing",
+      "difficulty_tier": 2,
+      "question_text": "A team is incrementally adding type hints to a large, previously untyped Django/FastAPI codebase and wants CI to catch type errors without rewriting everything at once. Describe your approach.",
+      "reference_answer": {
+        "text": "Introduce mypy or pyright with gradual typing rather than flipping strict mode on globally: run it in CI but scope strict checking to new or already-typed modules (e.g. via per-module overrides or a growing allowlist), so untyped legacy code doesn't fail the build. Prioritize adding types to public interfaces/boundaries first (service functions, API schemas) since those give the most value, use Protocol/TypedDict for structural typing where full class hierarchies aren't practical, and track any necessary # type: ignore usages so they don't silently accumulate.",
+        "rubric_points": [
+          "Proposes gradual/incremental typing via per-module config rather than global strict mode",
+          "Prioritizes typing public interfaces/boundaries over the whole codebase at once",
+          "Mentions tracking or limiting type: ignore usage to avoid silent accumulation"
+        ]
+      }
+    },
+    {
+      "fundamentals": "python",
+      "modality": "defend",
+      "competency_area": "packaging",
+      "difficulty_tier": 2,
+      "question_text": "A teammate wants to pin every transitive dependency to an exact version (using pip freeze output as requirements.txt) for a library package they're about to publish to PyPI. Defend or push back on this.",
+      "reference_answer": {
+        "text": "Push back for a library: exact-pinning transitive dependencies forces every downstream consumer to accept those exact versions too, which causes dependency resolution conflicts the moment two libraries in someone's project pin incompatible exact versions of the same transitive dependency. Libraries should declare loose, compatible version ranges (e.g. requests>=2.28,<3) so pip's resolver has room to satisfy the whole dependency graph. Exact pinning via a lockfile is the right call for a deployable application (where reproducibility across environments matters more than composability), and tools like pip-tools or Poetry can keep that distinction between published constraints and a dev lockfile.",
+        "rubric_points": [
+          "Identifies exact transitive pinning in a library causing downstream dependency resolution conflicts",
+          "Distinguishes library version-range constraints from application lockfile pinning",
+          "Recommends compatible version ranges and/or a tool that separates constraints from lockfiles"
+        ]
+      }
+    },
+    {
+      "fundamentals": "sql",
+      "modality": "foundational",
+      "competency_area": "indexing",
+      "difficulty_tier": 1,
+      "question_text": "Adding an index speeds up SELECT queries filtering on that column, but tends to slow down which kind of operation?",
+      "choices": [
+        {
+          "text": "INSERT/UPDATE/DELETE, since the index must also be maintained on every write",
+          "is_correct": true
+        },
+        {
+          "text": "SELECT queries on that column",
+          "is_correct": false
+        },
+        {
+          "text": "Read replica failover",
+          "is_correct": false
+        },
+        {
+          "text": "Connection pooling",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "sql",
+      "modality": "foundational",
+      "competency_area": "joins",
+      "difficulty_tier": 2,
+      "question_text": "A CROSS JOIN between a table with 100 rows and a table with 50 rows, with no filtering, produces how many rows?",
+      "choices": [
+        {
+          "text": "5000 rows (the Cartesian product)",
+          "is_correct": true
+        },
+        {
+          "text": "150 rows",
+          "is_correct": false
+        },
+        {
+          "text": "100 rows",
+          "is_correct": false
+        },
+        {
+          "text": "50 rows",
+          "is_correct": false
+        }
+      ]
+    },
+    {
+      "fundamentals": "sql",
+      "modality": "diagnose",
+      "competency_area": "transactions",
+      "difficulty_tier": 2,
+      "question_text": "Under load, the application starts throwing 'deadlock detected' errors. Two different endpoints each update the same two tables, but in opposite order, within their transactions. Diagnose the cause and propose a fix.",
+      "reference_answer": {
+        "text": "This is a classic deadlock from inconsistent lock acquisition order: transaction A locks table1 then waits on table2, while transaction B locks table2 then waits on table1, and neither can proceed. Fix by enforcing a consistent ordering for acquiring locks/updating tables across all code paths that touch both tables, keeping transactions short to reduce the lock window, and adding retry-with-backoff logic for the (still possible) occasional deadlock rather than assuming it can be eliminated entirely.",
+        "rubric_points": [
+          "Identifies inconsistent lock/update ordering across transactions as the deadlock cause",
+          "Proposes enforcing a consistent ordering across all code paths as the primary fix",
+          "Mentions shortening transactions and/or retry-with-backoff as a complementary mitigation"
+        ]
+      }
+    },
+    {
+      "fundamentals": "sql",
+      "modality": "architect",
+      "competency_area": "query_plans",
+      "difficulty_tier": 3,
+      "question_text": "You need to diagnose and fix a slow production report query, but you only have read access to a query log and EXPLAIN, and can't take a full outage window. Design your approach.",
+      "reference_answer": {
+        "text": "Reproduce the query with EXPLAIN (ANALYZE, BUFFERS) against a staging replica with representative data volume rather than against production directly, so you're not adding load to prod while investigating. Look for sequential scans and high-cost nodes on large tables, check whether relevant filter/join columns are indexed, and confirm table statistics are current (stale stats can make the planner choose bad plans even with indexes present). If a new index is needed, create it with CREATE INDEX CONCURRENTLY in production to avoid locking the table, then re-run EXPLAIN ANALYZE afterward to confirm the plan actually improved before considering it done.",
+        "rubric_points": [
+          "Reproduces and analyzes the query plan on staging/replica rather than live production",
+          "Looks for missing indexes and stale statistics as root causes via EXPLAIN ANALYZE",
+          "Uses CREATE INDEX CONCURRENTLY (or equivalent non-locking approach) and verifies the fix with a before/after plan comparison"
+        ]
+      }
+    },
+    {
+      "fundamentals": "sql",
+      "modality": "communicate",
+      "competency_area": "normalization",
+      "difficulty_tier": 2,
+      "question_text": "A product manager asks why the engineering team wants to split a single wide 'orders' table (which repeats the customer's address on every order row) into separate 'orders' and 'customers' tables, given the current setup 'already works.' Explain the trade-off in plain, non-technical terms.",
+      "reference_answer": {
+        "text": "Right now, if a customer's address changes, we'd have to update it on every single order row for that customer, and if we miss even one, our records disagree with each other about where that customer lives — that's the real risk, not just tidiness. Splitting the data so each customer's address lives in exactly one place means an update happens once and every order automatically reflects the correct, current address. The trade-off is that looking up an order's shipping details now requires joining two tables instead of reading one, which is a small, well-understood cost compared to the risk of inconsistent data as the business grows.",
+        "rubric_points": [
+          "Explains the redundancy/update-anomaly risk of repeating address data per order in plain terms",
+          "Explains normalization gives a single source of truth for the address",
+          "Acknowledges the join-cost trade-off honestly rather than pretending there's no downside"
+        ]
+      }
+    }
+  ]
 }

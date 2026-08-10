@@ -5,14 +5,15 @@ from __future__ import annotations
 import secrets
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import transaction
 from django.utils import timezone
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
-from rest_framework.exceptions import AuthenticationFailed, ValidationError
+from rest_framework.exceptions import AuthenticationFailed, PermissionDenied, ValidationError
 
-from apps.users.models import EmailVerificationToken, PasswordResetToken, Profile, User, UserPreference
+from apps.users.models import EmailVerificationToken, PasswordResetToken, Profile, User, UserPreference, UserSkill
 from apps.users.tasks import dispatch_password_reset_email, dispatch_verification_email
 
 
@@ -194,3 +195,55 @@ def update_profile(user: User, data: dict) -> Profile:
         profile.onboarding_completed = True
     profile.save()
     return profile
+
+
+def _staff_progress_reset_allowed() -> bool:
+    if settings.DEBUG:
+        return True
+    return bool(getattr(settings, "ALLOW_STAFF_PROGRESS_RESET", False))
+
+
+@transaction.atomic
+def reset_user_progress(*, user: User, confirm: str) -> dict:
+    """
+    Nuclear wipe of practice + onboarding for the authenticated staff user.
+    Keeps the account (email/password); returns them to initial onboarding.
+    """
+    if not getattr(user, "is_staff", False):
+        raise PermissionDenied("Staff access required.")
+    if not _staff_progress_reset_allowed():
+        raise PermissionDenied(
+            "Progress reset is disabled. Set DEBUG=True or ALLOW_STAFF_PROGRESS_RESET=True."
+        )
+    if (confirm or "").strip() != "RESET":
+        raise ValidationError({"confirm": 'Type RESET exactly to confirm.'})
+
+    from apps.challenges.models import ChallengeAttempt, DailyChallenge
+    from apps.diagnostics.models import DiagnosticRoadmapItem, DiagnosticSession
+    from apps.gaps.models import UserSkillGap
+    from apps.sessions.models import LearningSession
+
+    deleted = {
+        "roadmap_items": DiagnosticRoadmapItem.objects.filter(user=user).delete()[0],
+        "diagnostic_sessions": DiagnosticSession.objects.filter(user=user).delete()[0],
+        "skill_gaps": UserSkillGap.objects.filter(user=user).delete()[0],
+        "challenge_attempts": ChallengeAttempt.objects.filter(user=user).delete()[0],
+        "daily_challenges": DailyChallenge.objects.filter(user=user).delete()[0],
+        "learning_sessions": LearningSession.objects.filter(user=user).delete()[0],
+        "user_skills": UserSkill.objects.filter(user=user).delete()[0],
+    }
+
+    profile, _ = Profile.objects.get_or_create(user=user)
+    profile.onboarding_completed = False
+    profile.diagnostic_cycle = 1
+    profile.diagnostic_difficulty_bump = 0
+    profile.technical_goal = ""
+    profile.known_skills = []
+    profile.target_learn_skills = []
+    profile.target_role = None
+    profile.target_role_label = ""
+    profile.current_role = ""
+    profile.years_of_experience = None
+    profile.save()
+
+    return {"ok": True, "deleted": deleted}
