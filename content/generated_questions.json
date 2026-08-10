@@ -109,17 +109,17 @@
             "question_text": "Implement solve(input) where input is a JSON object with a count number. Return the string 'visible' when count is greater than zero, otherwise return 'empty'.",
             "test_cases": [
                 {
-                    "input": "{"count":0}",
+                    "input": "{\"count\":0}",
                     "expected_output": "empty",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"count":3}",
+                    "input": "{\"count\":3}",
                     "expected_output": "visible",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"count":-1}",
+                    "input": "{\"count\":-1}",
                     "expected_output": "empty",
                     "is_hidden": true
                 }
@@ -134,17 +134,17 @@
             "question_text": "Implement solve(input) and fix the bug in the following state-update logic. The input is a JSON object containing count. The intended result is count increased by 2. Buggy code: function update(count) { let state = count; state = state + 1; state = count + 1; return state; }",
             "test_cases": [
                 {
-                    "input": "{"count":0}",
+                    "input": "{\"count\":0}",
                     "expected_output": "2",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"count":5}",
+                    "input": "{\"count\":5}",
                     "expected_output": "7",
                     "is_hidden": true
                 },
                 {
-                    "input": "{"count":-3}",
+                    "input": "{\"count\":-3}",
                     "expected_output": "-1",
                     "is_hidden": true
                 }
@@ -302,13 +302,13 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "["/","/admin","/users","/admin/settings"]",
-                    "expected_output": "["/admin","/admin/settings"]",
+                    "input": "[\"/\",\"/admin\",\"/users\",\"/admin/settings\"]",
+                    "expected_output": "[\"/admin\",\"/admin/settings\"]",
                     "is_hidden": false
                 },
                 {
-                    "input": "["/administrator","/admin-panel"]",
-                    "expected_output": "["/administrator","/admin-panel"]",
+                    "input": "[\"/administrator\",\"/admin-panel\"]",
+                    "expected_output": "[\"/administrator\",\"/admin-panel\"]",
                     "is_hidden": true
                 }
             ]
@@ -322,18 +322,18 @@
             "question_text": "Implement solve(input) where input is a JSON object containing an array named items. Return the JSON string of the items sorted by their numeric price in ascending order.",
             "test_cases": [
                 {
-                    "input": "{"items":[]}",
+                    "input": "{\"items\":[]}",
                     "expected_output": "[]",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"items":[{"name":"B","price":20},{"name":"A","price":10}]}",
-                    "expected_output": "[{"name":"A","price":10},{"name":"B","price":20}]",
+                    "input": "{\"items\":[{\"name\":\"B\",\"price\":20},{\"name\":\"A\",\"price\":10}]}",
+                    "expected_output": "[{\"name\":\"A\",\"price\":10},{\"name\":\"B\",\"price\":20}]",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"items":[{"name":"X","price":5},{"name":"Y","price":5},{"name":"Z","price":1}]}",
-                    "expected_output": "[{"name":"Z","price":1},{"name":"X","price":5},{"name":"Y","price":5}]",
+                    "input": "{\"items\":[{\"name\":\"X\",\"price\":5},{\"name\":\"Y\",\"price\":5},{\"name\":\"Z\",\"price\":1}]}",
+                    "expected_output": "[{\"name\":\"Z\",\"price\":1},{\"name\":\"X\",\"price\":5},{\"name\":\"Y\",\"price\":5}]",
                     "is_hidden": true
                 }
             ]
@@ -352,13 +352,13 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"name":"A"},{"name":"B"}]",
-                    "expected_output": "["A","B"]",
+                    "input": "[{\"name\":\"A\"},{\"name\":\"B\"}]",
+                    "expected_output": "[\"A\",\"B\"]",
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"name":"Next"}]",
-                    "expected_output": "["Next"]",
+                    "input": "[{\"name\":\"Next\"}]",
+                    "expected_output": "[\"Next\"]",
                     "is_hidden": true
                 }
             ]
@@ -536,18 +536,18 @@
             "question_text": "Implement solve(input) where input is a JSON object containing an array named users. Return a JSON array containing the names of users whose active field is true.",
             "test_cases": [
                 {
-                    "input": "{"users":[]}",
+                    "input": "{\"users\":[]}",
                     "expected_output": "[]",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"users":[{"name":"A","active":true},{"name":"B","active":false}]}",
-                    "expected_output": "["A"]",
+                    "input": "{\"users\":[{\"name\":\"A\",\"active\":true},{\"name\":\"B\",\"active\":false}]}",
+                    "expected_output": "[\"A\"]",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"users":[{"name":"X","active":false},{"name":"Y","active":true},{"name":"Z","active":true}]}",
-                    "expected_output": "["Y","Z"]",
+                    "input": "{\"users\":[{\"name\":\"X\",\"active\":false},{\"name\":\"Y\",\"active\":true},{\"name\":\"Z\",\"active\":true}]}",
+                    "expected_output": "[\"Y\",\"Z\"]",
                     "is_hidden": true
                 }
             ]
@@ -566,13 +566,13 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"name":"A","price":100},{"name":"B","price":150}]",
-                    "expected_output": "[{"name":"A","price":100},{"name":"B","price":150}]",
+                    "input": "[{\"name\":\"A\",\"price\":100},{\"name\":\"B\",\"price\":150}]",
+                    "expected_output": "[{\"name\":\"A\",\"price\":100},{\"name\":\"B\",\"price\":150}]",
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"name":"X","price":99},{"name":"Y","price":101}]",
-                    "expected_output": "[{"name":"Y","price":101}]",
+                    "input": "[{\"name\":\"X\",\"price\":99},{\"name\":\"Y\",\"price\":101}]",
+                    "expected_output": "[{\"name\":\"Y\",\"price\":101}]",
                     "is_hidden": true
                 }
             ]
@@ -725,17 +725,17 @@
             "question_text": "Implement solve(input) where input is a JSON object containing name and age. Return 'adult' when age is at least 18, otherwise return 'minor'.",
             "test_cases": [
                 {
-                    "input": "{"name":"A","age":17}",
+                    "input": "{\"name\":\"A\",\"age\":17}",
                     "expected_output": "minor",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"name":"B","age":18}",
+                    "input": "{\"name\":\"B\",\"age\":18}",
                     "expected_output": "adult",
                     "is_hidden": false
                 },
                 {
-                    "input": "{"name":"C","age":0}",
+                    "input": "{\"name\":\"C\",\"age\":0}",
                     "expected_output": "minor",
                     "is_hidden": true
                 }
@@ -755,17 +755,13 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"email":"[a@example.com
-                    ](mailto:a@example.com)"},{"email":"invalid"},{"email":"[b@test.org
-                    ](mailto:b@test.org)"}]",
-                    "expected_output": "[{"email":"[a@example.com
-                    ](mailto:a@example.com)"},{"email":"[b@test.org
-                    ](mailto:b@test.org)"}]",
+                    "input": "[{\"email\":\"a@example.com\"},{\"email\":\"invalid\"},{\"email\":\"b@test.org\"}]",
+                    "expected_output": "[{\"email\":\"a@example.com\"},{\"email\":\"b@test.org\"}]",
                     "is_hidden": false
                 },
                 {
-                    "input": "[{"email":"a@@example.com"},{"email":"@test.com"}]",
-                    "expected_output": "[{"email":"@test.com"}]",
+                    "input": "[{\"email\":\"a@@example.com\"},{\"email\":\"@test.com\"}]",
+                    "expected_output": "[{\"email\":\"@test.com\"}]",
                     "is_hidden": true
                 }
             ]
@@ -947,12 +943,12 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "[1,"2",true,3,null]",
+                    "input": "[1,\"2\",true,3,null]",
                     "expected_output": "[1,3]",
                     "is_hidden": false
                 },
                 {
-                    "input": "[0,-1,2.5,"",false]",
+                    "input": "[0,-1,2.5,\"\",false]",
                     "expected_output": "[0,-1,2.5]",
                     "is_hidden": true
                 }
@@ -1047,13 +1043,13 @@
                     "is_hidden": false
                 },
                 {
-                    "input": "["cat","python","code","hello"]",
-                    "expected_output": "["python","code","hello"]",
+                    "input": "[\"cat\",\"python\",\"code\",\"hello\"]",
+                    "expected_output": "[\"python\",\"code\",\"hello\"]",
                     "is_hidden": false
                 },
                 {
-                    "input": "["","abc","abcd"]",
-                    "expected_output": "["abcd"]",
+                    "input": "[\"\",\"abc\",\"abcd\"]",
+                    "expected_output": "[\"abcd\"]",
                     "is_hidden": true
                 }
             ]
