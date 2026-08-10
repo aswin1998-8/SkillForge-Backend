@@ -74,33 +74,7 @@ def build_roadmap(user: User) -> dict[str, Any]:
 
     ordered = list(suggested)
     annotations: dict[int, str] = {}
-    try:
-        from apps.ai.services.assessment_service import rank_roadmap
-
-        eligible_steps = [
-            {
-                "challenge_id": c.id,
-                "title": c.title,
-                "difficulty": c.difficulty,
-                "skill_slugs": [cs.skill.slug for cs in c.challenge_skills.all()],
-            }
-            for c in suggested
-        ]
-        ranked = rank_roadmap(
-            {
-                "eligible_steps": eligible_steps,
-                "focus_skills": [g.skill.slug for g in gaps[:5]],
-            }
-        )
-        id_order = ranked.ordered_challenge_ids or [c.id for c in suggested]
-        by_id = {c.id: c for c in suggested}
-        ordered = [by_id[i] for i in id_order if i in by_id]
-        for leftover in suggested:
-            if leftover not in ordered:
-                ordered.append(leftover)
-        annotations = {a.challenge_id: a.note for a in ranked.annotations}
-    except Exception:  # noqa: BLE001
-        ordered = suggested
+    ordered = sorted(suggested, key=lambda c: (c.difficulty, c.id))
 
     steps = []
     for gap in gaps:

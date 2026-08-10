@@ -1,200 +1,83 @@
-"""Seed catalog data: roles, skills, diagnostic, and challenges."""
+"""Seed catalog data: roles, skills, frameworks, and sample questions."""
 
 from __future__ import annotations
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.challenges.models import Challenge, ChallengeSkill
-from apps.diagnostics.models import Diagnostic, DiagnosticQuestion
+from apps.diagnostics.topic_defaults import ensure_default_topics
 from apps.roles.models import Role, RoleSkill, Skill
 
 
-AI_SKILLS = [
-    ("RAG", "rag", "Retrieval-augmented generation patterns and evaluation."),
-    ("LLM APIs", "llm-apis", "Prompting, tool use, and production LLM API design."),
-    ("Agent Architecture", "agent-architecture", "Multi-step agents, planners, and tool routers."),
-    ("Evaluation", "evaluation", "Offline/online eval harnesses and quality metrics."),
-    ("AI Security", "ai-security", "Prompt injection, data leakage, and safe tool use."),
-    ("Observability", "observability", "Tracing, cost, latency, and quality monitoring for AI systems."),
-]
-
-FRONTEND_SKILLS = [
+SOFTWARE_SKILLS = [
     ("React", "react", "Component architecture and React patterns."),
+    ("Next.js", "nextjs", "App Router, SSR, and deployment."),
+    ("Django", "django", "ORM, views, and API design."),
+    ("FastAPI", "fastapi", "Async APIs, validation, and dependencies."),
     ("TypeScript", "typescript", "Strong typing for frontend applications."),
-    ("CSS Architecture", "css-architecture", "Responsive layout and design systems."),
+    ("Python", "python", "Core Python for backend engineering."),
 ]
 
 
 class Command(BaseCommand):
-    help = "Seed SkillForge roles, skills, diagnostic, and challenges."
+    help = "Seed SkillForge roles, skills, frameworks, and sample diagnostic questions."
 
     @transaction.atomic
     def handle(self, *args, **options) -> None:
         frontend = self._upsert_role(
             name="Frontend Developer",
             slug="frontend-developer",
-            description="Builds polished product UIs with strong engineering fundamentals.",
+            description="Builds polished product UIs with React and Next.js.",
         )
-        ai_engineer = self._upsert_role(
-            name="AI Engineer",
-            slug="ai-engineer",
-            description="Designs and ships reliable AI-powered systems.",
+        backend = self._upsert_role(
+            name="Backend Developer",
+            slug="backend-developer",
+            description="Builds reliable APIs with Django and FastAPI.",
         )
 
-        ai_skill_objs: dict[str, Skill] = {}
-        for name, slug, description in AI_SKILLS:
+        skill_objs: dict[str, Skill] = {}
+        for name, slug, description in SOFTWARE_SKILLS:
             skill = self._upsert_skill(name=name, slug=slug, description=description)
-            ai_skill_objs[slug] = skill
+            skill_objs[slug] = skill
+
+        for slug in ("react", "nextjs", "typescript"):
             RoleSkill.objects.update_or_create(
-                role=ai_engineer,
-                skill=skill,
+                role=frontend,
+                skill=skill_objs[slug],
+                defaults={"importance": 5},
+            )
+        for slug in ("django", "fastapi", "python"):
+            RoleSkill.objects.update_or_create(
+                role=backend,
+                skill=skill_objs[slug],
                 defaults={"importance": 5},
             )
 
-        for idx, (name, slug, description) in enumerate(FRONTEND_SKILLS, start=1):
-            skill = self._upsert_skill(name=name, slug=slug, description=description)
-            RoleSkill.objects.update_or_create(
-                role=frontend,
-                skill=skill,
-                defaults={"importance": idx},
-            )
-
-        diagnostic, _ = Diagnostic.objects.update_or_create(
-            title="AI Engineer Baseline Diagnostic",
-            defaults={
-                "description": "Assesses foundational AI engineering skills across RAG, APIs, agents, eval, and security.",
-                "is_active": True,
-            },
-        )
-        questions = [
-            (
-                1,
-                "Describe how you would design a RAG pipeline for an internal knowledge base. What failure modes worry you most?",
-                "rag",
-                2,
-            ),
-            (
-                2,
-                "How do you structure LLM API calls for reliability (retries, timeouts, tool calling, and cost control)?",
-                "llm-apis",
-                2,
-            ),
-            (
-                3,
-                "Sketch an agent architecture for a multi-step research task. Where do you put planning vs execution?",
-                "agent-architecture",
-                3,
-            ),
-            (
-                4,
-                "What evaluation suite would you build before shipping an AI feature to production?",
-                "evaluation",
-                2,
-            ),
-            (
-                5,
-                "List the top AI security risks for a tool-using chatbot and how you would mitigate them.",
-                "ai-security",
-                3,
-            ),
-        ]
-        for ordering, text, skill_slug, difficulty in questions:
-            DiagnosticQuestion.objects.update_or_create(
-                diagnostic=diagnostic,
-                ordering=ordering,
-                defaults={
-                    "text": text,
-                    "question_type": DiagnosticQuestion.QuestionType.FREE_TEXT,
-                    "skill": ai_skill_objs[skill_slug],
-                    "difficulty": difficulty,
-                },
-            )
+        ensure_default_topics()
+        call_command("import_questions", file="content/sample_questions.json")
 
         challenges_spec = [
             {
-                "title": "Explain RAG Chunking Trade-offs",
-                "slug": "explain-rag-chunking-tradeoffs",
+                "title": "Explain React Reconciliation",
+                "slug": "explain-react-reconciliation",
                 "modality": Challenge.Modality.THEORY,
                 "difficulty": 1,
-                "skill": "rag",
-                "scenario": "A teammate proposes fixed 512-token chunks with overlap for all documents.",
-                "requirements": ["Explain trade-offs", "Propose a better default"],
+                "skill": "react",
+                "scenario": "A junior asks why React needs keys in lists.",
+                "requirements": ["Explain reconciliation", "Explain key purpose"],
             },
             {
-                "title": "Implement Retry Wrapper for LLM Calls",
-                "slug": "implement-llm-retry-wrapper",
+                "title": "Implement Pagination Helper",
+                "slug": "implement-pagination-helper",
                 "modality": Challenge.Modality.CODING,
                 "difficulty": 2,
-                "skill": "llm-apis",
-                "scenario": "Write a resilient wrapper around an LLM client.",
-                "requirements": ["Exponential backoff", "Idempotency notes", "Error taxonomy"],
-            },
-            {
-                "title": "Research Agent Memory Strategies",
-                "slug": "research-agent-memory-strategies",
-                "modality": Challenge.Modality.RESEARCH,
-                "difficulty": 2,
-                "skill": "agent-architecture",
-                "scenario": "Compare short-term vs long-term memory approaches for agents.",
-                "requirements": ["Summarize 3 approaches", "Recommend one for a support bot"],
-            },
-            {
-                "title": "Defend Your Eval Harness",
-                "slug": "defend-eval-harness",
-                "modality": Challenge.Modality.DEFEND,
-                "difficulty": 3,
-                "skill": "evaluation",
-                "scenario": "Stakeholders claim offline evals are unnecessary if users like the demo.",
-                "requirements": ["Defend offline evals", "Propose a minimal launch bar"],
-            },
-            {
-                "title": "Diagnose Prompt Injection Incident",
-                "slug": "diagnose-prompt-injection-incident",
-                "modality": Challenge.Modality.DIAGNOSE,
-                "difficulty": 3,
-                "skill": "ai-security",
-                "scenario": "A tool-using assistant leaked internal notes after a crafted user prompt.",
-                "requirements": ["Root-cause analysis", "Containment steps", "Hardening plan"],
-            },
-            {
-                "title": "Architect Observability for AI Features",
-                "slug": "architect-ai-observability",
-                "modality": Challenge.Modality.ARCHITECT,
-                "difficulty": 2,
-                "skill": "observability",
-                "scenario": "Design tracing and quality signals for an AI support assistant.",
-                "requirements": ["Trace model", "Quality metrics", "Alerting thresholds"],
-            },
-            {
-                "title": "Explain This Retrieval Function",
-                "slug": "explain-retrieval-function",
-                "modality": Challenge.Modality.EXPLAIN_CODE,
-                "difficulty": 1,
-                "skill": "rag",
-                "scenario": "Explain a hybrid retrieval function combining BM25 and embeddings.",
-                "requirements": ["Line-by-line intent", "Failure modes"],
-            },
-            {
-                "title": "Use AI to Draft an Eval Rubric",
-                "slug": "use-ai-draft-eval-rubric",
-                "modality": Challenge.Modality.USE_AI,
-                "difficulty": 2,
-                "skill": "evaluation",
-                "scenario": "Use an AI assistant to draft a rubric, then critique and improve it.",
-                "requirements": ["Show prompt", "Critique AI output", "Final rubric"],
-            },
-            {
-                "title": "Communicate an AI Risk to Leadership",
-                "slug": "communicate-ai-risk-leadership",
-                "modality": Challenge.Modality.COMMUNICATE,
-                "difficulty": 2,
-                "skill": "ai-security",
-                "scenario": "Write a short memo explaining prompt-injection risk without jargon overload.",
-                "requirements": ["Executive summary", "Business impact", "Ask"],
+                "skill": "django",
+                "scenario": "Write a helper to paginate queryset results.",
+                "requirements": ["Accept page + page_size", "Return slice metadata"],
             },
         ]
-
         for spec in challenges_spec:
             challenge, _ = Challenge.objects.update_or_create(
                 slug=spec["slug"],
@@ -203,26 +86,17 @@ class Command(BaseCommand):
                     "description": spec["scenario"],
                     "modality": spec["modality"],
                     "difficulty": spec["difficulty"],
-                    "estimated_duration_minutes": 25 + spec["difficulty"] * 5,
                     "scenario": spec["scenario"],
                     "requirements": spec["requirements"],
-                    "constraints": ["No proprietary data", "Keep answer under 800 words unless coding"],
-                    "workspace_config": {"editor": "monaco" if spec["modality"] == Challenge.Modality.CODING else "markdown"},
                     "is_active": True,
                 },
             )
             ChallengeSkill.objects.update_or_create(
                 challenge=challenge,
-                skill=ai_skill_objs[spec["skill"]],
+                skill=skill_objs[spec["skill"]],
             )
 
-        from apps.diagnostics.domain_defaults import ensure_default_domain_taxonomies
-
-        created_domains = ensure_default_domain_taxonomies()
-        if created_domains:
-            self.stdout.write(f"Created {created_domains} default DomainTaxonomy row(s).")
-
-        self.stdout.write(self.style.SUCCESS("Seed data created/updated successfully."))
+        self.stdout.write(self.style.SUCCESS("Seed data loaded."))
 
     def _upsert_role(self, *, name: str, slug: str, description: str) -> Role:
         role, _ = Role.objects.update_or_create(

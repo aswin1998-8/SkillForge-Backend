@@ -47,9 +47,7 @@ INSTALLED_APPS = [
     "apps.gaps",
     "apps.challenges",
     "apps.sessions",
-    "apps.debriefs",
     "apps.progress",
-    "apps.ai",
 ]
 
 MIDDLEWARE = [
@@ -118,23 +116,16 @@ ACCESS_TOKEN_COOKIE_NAME = os.getenv("ACCESS_TOKEN_COOKIE_NAME", "sf_access")
 REFRESH_TOKEN_COOKIE_NAME = os.getenv("REFRESH_TOKEN_COOKIE_NAME", "sf_refresh")
 
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-AI_PROVIDER = os.getenv("AI_PROVIDER", "gemini")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY", "")
-CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-20250514")
-# Deterministic skill scoring weights (must sum to 1.0)
-AI_SCORE_WEIGHTS = {
-    "FOUNDATION": float(os.getenv("AI_SCORE_WEIGHT_FOUNDATION", "0.20")),
-    "SCENARIO": float(os.getenv("AI_SCORE_WEIGHT_SCENARIO", "0.25")),
-    "DEBUGGING": float(os.getenv("AI_SCORE_WEIGHT_DEBUGGING", "0.25")),
-    "CODING": float(os.getenv("AI_SCORE_WEIGHT_CODING", "0.20")),
-    "CODE_REVIEW": float(os.getenv("AI_SCORE_WEIGHT_CODE_REVIEW", "0.10")),
-}
-AI_MAX_DIAGNOSTIC_TURNS = int(os.getenv("AI_MAX_DIAGNOSTIC_TURNS", "8"))
-AI_STRONG_THRESHOLD = float(os.getenv("AI_STRONG_THRESHOLD", "0.7"))
-AI_WEAK_THRESHOLD = float(os.getenv("AI_WEAK_THRESHOLD", "0.4"))
+ADAPTIVE_WEAK_THRESHOLD = float(os.getenv("ADAPTIVE_WEAK_THRESHOLD", "0.4"))
+ADAPTIVE_STRONG_THRESHOLD = float(os.getenv("ADAPTIVE_STRONG_THRESHOLD", "0.7"))
+ADAPTIVE_ROLLING_WINDOW = int(os.getenv("ADAPTIVE_ROLLING_WINDOW", "5"))
 DIAGNOSTIC_MAX_COMPETENCY_AREAS = int(os.getenv("DIAGNOSTIC_MAX_COMPETENCY_AREAS", "8"))
+CODE_EXECUTION_ENABLED = os.getenv("CODE_EXECUTION_ENABLED", "True").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+CODE_EXECUTION_TIMEOUT_SECONDS = float(os.getenv("CODE_EXECUTION_TIMEOUT_SECONDS", "5"))
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
@@ -172,7 +163,6 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "user": "120/min",
-        "ai": "20/min",
         "register": "5/min",
         "login": "10/min",
         "google": "10/min",

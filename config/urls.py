@@ -17,7 +17,6 @@ urlpatterns = [
     path("api/v1/", include("apps.diagnostics.urls")),
     path("api/v1/", include("apps.gaps.urls")),
     path("api/v1/", include("apps.challenges.urls")),
-    path("api/v1/", include("apps.debriefs.urls")),
     path("api/v1/", include("apps.sessions.urls")),
     path("api/v1/", include("apps.progress.urls")),
 ]

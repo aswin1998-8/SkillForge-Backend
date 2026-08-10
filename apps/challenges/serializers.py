@@ -75,7 +75,6 @@ class ChallengeAttemptSerializer(serializers.ModelSerializer):
     challenge = ChallengeSerializer(read_only=True)
     submission = SubmissionSerializer(read_only=True)
     confidence = ConfidenceRatingSerializer(read_only=True)
-    debrief_session_id = serializers.SerializerMethodField()
 
     class Meta:
         model = ChallengeAttempt
@@ -88,18 +87,7 @@ class ChallengeAttemptSerializer(serializers.ModelSerializer):
             "completed_at",
             "submission",
             "confidence",
-            "debrief_session_id",
         )
-
-    def get_debrief_session_id(self, obj: ChallengeAttempt):
-        attached = getattr(obj, "_debrief_session_id", None)
-        if attached is not None:
-            return attached
-        sessions = getattr(obj, "debrief_sessions", None)
-        if sessions is not None:
-            first = sessions.first() if hasattr(sessions, "first") else None
-            return first.id if first is not None else None
-        return None
 
 
 class ChallengeSubmitSerializer(serializers.Serializer):

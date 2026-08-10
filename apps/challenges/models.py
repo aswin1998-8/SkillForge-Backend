@@ -15,7 +15,6 @@ class Challenge(models.Model):
         DIAGNOSE = "DIAGNOSE", "Diagnose"
         ARCHITECT = "ARCHITECT", "Architect"
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
-        USE_AI = "USE_AI", "Use AI"
         COMMUNICATE = "COMMUNICATE", "Communicate"
 
     title = models.CharField(max_length=255)

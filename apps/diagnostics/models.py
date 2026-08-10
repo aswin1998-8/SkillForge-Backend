@@ -1,315 +1,200 @@
-"""Diagnostic assessment models."""
+"""Diagnostic assessment and static content models."""
 
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
-class Diagnostic(models.Model):
-    title = models.CharField(max_length=255)
-    description = models.TextField(blank=True, default="")
-    is_active = models.BooleanField(default=True)
+class FundamentalsTopic(models.Model):
+    class LanguageFamily(models.TextChoices):
+        JAVASCRIPT = "javascript", "JavaScript / TypeScript"
+        PYTHON = "python", "Python"
+
+    language_family = models.CharField(
+        max_length=32,
+        choices=LanguageFamily.choices,
+        unique=True,
+    )
+    competency_areas = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["title"]
+        ordering = ["language_family"]
 
     def __str__(self) -> str:
-        return self.title
+        return self.get_language_family_display()
+
+    def clean_competency_areas(self) -> list[str]:
+        raw = self.competency_areas or []
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        for item in raw:
+            name = str(item or "").strip()
+            if name and name not in out:
+                out.append(name)
+        return out
 
 
-class DiagnosticQuestion(models.Model):
-    class QuestionType(models.TextChoices):
-        FREE_TEXT = "FREE_TEXT", "Free text"
-        CODE = "CODE", "Code"
-        MULTIPLE_CHOICE = "MULTIPLE_CHOICE", "Multiple choice"
+class FrameworkTopic(models.Model):
+    class FrameworkName(models.TextChoices):
+        REACT = "react", "React"
+        NEXTJS = "nextjs", "Next.js"
+        DJANGO = "django", "Django"
+        FASTAPI = "fastapi", "FastAPI"
 
-    diagnostic = models.ForeignKey(
-        Diagnostic,
+    framework_name = models.CharField(
+        max_length=32,
+        choices=FrameworkName.choices,
+        unique=True,
+    )
+    fundamentals_topic = models.ForeignKey(
+        FundamentalsTopic,
+        on_delete=models.PROTECT,
+        related_name="frameworks",
+    )
+    competency_areas = models.JSONField(default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["framework_name"]
+
+    def __str__(self) -> str:
+        return self.get_framework_name_display()
+
+    def clean_competency_areas(self) -> list[str]:
+        raw = self.competency_areas or []
+        if not isinstance(raw, list):
+            return []
+        out: list[str] = []
+        for item in raw:
+            name = str(item or "").strip()
+            if name and name not in out:
+                out.append(name)
+        return out
+
+
+class Question(models.Model):
+    class Modality(models.TextChoices):
+        FOUNDATIONAL = "foundational", "Foundational"
+        CODING = "coding", "Coding"
+        FIND_ISSUES = "find_issues", "Find issues"
+        SCENARIO = "scenario", "Scenario"
+        DEFEND = "defend", "Defend"
+        DIAGNOSE = "diagnose", "Diagnose"
+        ARCHITECT = "architect", "Architect"
+        EXPLAIN = "explain", "Explain"
+        COMMUNICATE = "communicate", "Communicate"
+
+    class Language(models.TextChoices):
+        PYTHON = "python", "Python"
+        JAVASCRIPT = "javascript", "JavaScript"
+
+    fundamentals_topic = models.ForeignKey(
+        FundamentalsTopic,
+        null=True,
+        blank=True,
         on_delete=models.CASCADE,
         related_name="questions",
     )
-    text = models.TextField()
-    question_type = models.CharField(
-        max_length=32,
-        choices=QuestionType.choices,
-        default=QuestionType.FREE_TEXT,
-    )
-    skill = models.ForeignKey(
-        "roles.Skill",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="diagnostic_questions",
-    )
-    difficulty = models.PositiveSmallIntegerField(default=1)
-    ordering = models.PositiveIntegerField(default=0)
-
-    class Meta:
-        ordering = ["ordering", "id"]
-
-    def __str__(self) -> str:
-        return f"Q{self.ordering}: {self.text[:40]}"
-
-
-class DiagnosticAttempt(models.Model):
-    class Status(models.TextChoices):
-        IN_PROGRESS = "IN_PROGRESS", "In progress"
-        SUBMITTED = "SUBMITTED", "Submitted"
-        PROCESSING = "PROCESSING", "Processing"
-        COMPLETED = "COMPLETED", "Completed"
-        FAILED = "FAILED", "Failed"
-
-    class Goal(models.TextChoices):
-        ROLE_SWITCH = "ROLE_SWITCH", "Role switch"
-        CURRENT_ROLE = "CURRENT_ROLE", "Current role"
-
-    class Stage(models.TextChoices):
-        FOUNDATION = "FOUNDATION", "Foundation"
-        SCENARIO = "SCENARIO", "Scenario"
-        DEBUGGING = "DEBUGGING", "Debugging"
-        CODING = "CODING", "Coding"
-        CODE_REVIEW = "CODE_REVIEW", "Code review"
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="diagnostic_attempts",
-    )
-    diagnostic = models.ForeignKey(
-        Diagnostic,
-        on_delete=models.CASCADE,
-        related_name="attempts",
-    )
-    status = models.CharField(
-        max_length=32,
-        choices=Status.choices,
-        default=Status.IN_PROGRESS,
-    )
-    goal = models.CharField(
-        max_length=32,
-        choices=Goal.choices,
-        default=Goal.ROLE_SWITCH,
-        blank=True,
-    )
-    current_stage = models.CharField(
-        max_length=32,
-        choices=Stage.choices,
-        default=Stage.FOUNDATION,
-    )
-    stage_history = models.JSONField(default=list, blank=True)
-    active_turn_id = models.PositiveIntegerField(null=True, blank=True)
-    skill_scores = models.JSONField(default=dict, blank=True)
-    transfer_report = models.JSONField(default=list, blank=True)
-    gap_report = models.JSONField(default=list, blank=True)
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        ordering = ["-started_at"]
-
-    def __str__(self) -> str:
-        return f"Attempt<{self.id}:{self.status}>"
-
-
-class DiagnosticTurn(models.Model):
-    class Status(models.TextChoices):
-        PENDING = "PENDING", "Pending"
-        ASKED = "ASKED", "Asked"
-        ANSWERED = "ANSWERED", "Answered"
-        EVALUATED = "EVALUATED", "Evaluated"
-        FAILED = "FAILED", "Failed"
-
-    attempt = models.ForeignKey(
-        DiagnosticAttempt,
-        on_delete=models.CASCADE,
-        related_name="turns",
-    )
-    ordering = models.PositiveIntegerField(default=1)
-    stage = models.CharField(max_length=32, choices=DiagnosticAttempt.Stage.choices)
-    skill = models.ForeignKey(
-        "roles.Skill",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="diagnostic_turns",
-    )
-    difficulty = models.CharField(max_length=32, default="MEDIUM")
-    question_type = models.CharField(max_length=32, default="FREE_TEXT")
-    question_payload = models.JSONField(default=dict, blank=True)
-    answer_text = models.TextField(blank=True, default="")
-    evaluation = models.JSONField(default=dict, blank=True)
-    status = models.CharField(
-        max_length=32,
-        choices=Status.choices,
-        default=Status.PENDING,
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["ordering", "id"]
-        unique_together = ("attempt", "ordering")
-
-    def __str__(self) -> str:
-        return f"Turn<{self.attempt_id}:{self.ordering}:{self.stage}>"
-
-
-class SkillEvidence(models.Model):
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="skill_evidence",
-    )
-    skill = models.ForeignKey(
-        "roles.Skill",
-        on_delete=models.CASCADE,
-        related_name="skill_evidence",
-    )
-    attempt = models.ForeignKey(
-        DiagnosticAttempt,
+    framework_topic = models.ForeignKey(
+        FrameworkTopic,
         null=True,
         blank=True,
         on_delete=models.CASCADE,
-        related_name="skill_evidence",
+        related_name="questions",
     )
-    turn = models.ForeignKey(
-        DiagnosticTurn,
-        null=True,
+    competency_area = models.CharField(max_length=255)
+    modality = models.CharField(max_length=32, choices=Modality.choices)
+    question_text = models.TextField()
+    difficulty_tier = models.PositiveSmallIntegerField(default=1)
+    language = models.CharField(
+        max_length=32,
+        choices=Language.choices,
         blank=True,
-        on_delete=models.SET_NULL,
-        related_name="skill_evidence",
+        default="",
     )
-    stage = models.CharField(max_length=32)
-    score = models.FloatField(default=0.0)
-    evaluation = models.JSONField(default=dict, blank=True)
-    strengths = models.JSONField(default=list, blank=True)
-    weaknesses = models.JSONField(default=list, blank=True)
-    confidence = models.FloatField(default=0.0)
-    source_type = models.CharField(max_length=64, default="diagnostic_turn")
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["difficulty_tier", "id"]
 
     def __str__(self) -> str:
-        return f"SkillEvidence<{self.user_id}:{self.skill_id}:{self.stage}>"
+        return f"{self.modality}:{self.competency_area}:{self.id}"
+
+    def clean(self) -> None:
+        has_fundamentals = self.fundamentals_topic_id is not None
+        has_framework = self.framework_topic_id is not None
+        if has_fundamentals == has_framework:
+            raise ValidationError(
+                "Exactly one of fundamentals_topic or framework_topic must be set."
+            )
+        if self.modality in {self.Modality.CODING, self.Modality.FIND_ISSUES}:
+            if not self.language:
+                raise ValidationError("Coding questions require a language.")
 
 
-class DiagnosticAnswer(models.Model):
-    attempt = models.ForeignKey(
-        DiagnosticAttempt,
-        on_delete=models.CASCADE,
-        related_name="answers",
-    )
+class QuestionChoice(models.Model):
     question = models.ForeignKey(
-        DiagnosticQuestion,
+        Question,
         on_delete=models.CASCADE,
-        related_name="answers",
+        related_name="choices",
     )
-    answer_text = models.TextField(blank=True, default="")
-    updated_at = models.DateTimeField(auto_now=True)
+    choice_text = models.TextField()
+    is_correct = models.BooleanField(default=False)
 
     class Meta:
-        unique_together = ("attempt", "question")
+        ordering = ["id"]
 
     def __str__(self) -> str:
-        return f"Answer<{self.attempt_id}:{self.question_id}>"
+        return f"Choice<{self.question_id}:{self.choice_text[:40]}>"
 
 
-class DiagnosticResult(models.Model):
-    attempt = models.OneToOneField(
-        DiagnosticAttempt,
+class CodingTestCase(models.Model):
+    question = models.ForeignKey(
+        Question,
         on_delete=models.CASCADE,
-        related_name="result",
+        related_name="test_cases",
     )
-    strengths = models.JSONField(default=list, blank=True)
-    gaps = models.JSONField(default=list, blank=True)
-    evidence = models.JSONField(default=list, blank=True)
-    skill_findings = models.JSONField(default=list, blank=True)
-    recommended_focus = models.CharField(max_length=255, blank=True, default="")
-    raw_payload = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self) -> str:
-        return f"Result<{self.attempt_id}>"
-
-
-class RoleTaxonomy(models.Model):
-    """Admin-managed competency taxonomy for a target role (not LLM-invented)."""
-
-    role_name = models.CharField(max_length=255, unique=True)
-    competency_areas = models.JSONField(default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    input = models.TextField(blank=True, default="")
+    expected_output = models.TextField()
+    is_hidden = models.BooleanField(default=False)
+    order = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
-        verbose_name_plural = "role taxonomies"
-        ordering = ["role_name"]
+        ordering = ["order", "id"]
 
     def __str__(self) -> str:
-        return self.role_name
-
-    def clean_competency_areas(self) -> list[str]:
-        raw = self.competency_areas or []
-        if not isinstance(raw, list):
-            return []
-        out: list[str] = []
-        for item in raw:
-            name = str(item or "").strip()
-            if name and name not in out:
-                out.append(name)
-        return out
+        return f"TestCase<{self.question_id}:{self.order}>"
 
 
-class DomainTaxonomy(models.Model):
-    """Admin-managed competency taxonomy for a technical domain (not LLM-invented)."""
-
-    slug = models.SlugField(max_length=64, unique=True)
-    domain_name = models.CharField(max_length=255)
-    competency_areas = models.JSONField(default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        verbose_name_plural = "domain taxonomies"
-        ordering = ["domain_name"]
+class ReferenceAnswer(models.Model):
+    question = models.OneToOneField(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="reference_answer",
+    )
+    reference_text = models.TextField()
+    rubric_points = models.JSONField(default=list, blank=True)
 
     def __str__(self) -> str:
-        return f"{self.domain_name} ({self.slug})"
-
-    def clean_competency_areas(self) -> list[str]:
-        raw = self.competency_areas or []
-        if not isinstance(raw, list):
-            return []
-        out: list[str] = []
-        for item in raw:
-            name = str(item or "").strip()
-            if name and name not in out:
-                out.append(name)
-        return out
+        return f"ReferenceAnswer<{self.question_id}>"
 
 
 class DiagnosticSession(models.Model):
-    """Block A/B adaptive diagnostic session (replaces live Attempt/Turn flow)."""
+    """Static-content adaptive diagnostic session."""
 
     class Goal(models.TextChoices):
         SHARPEN_CURRENT = "sharpen_current", "Sharpen current role"
         SWITCH_ROLE = "switch_role", "Switch role"
 
     class Status(models.TextChoices):
-        PENDING = "PENDING", "Pending"
-        GENERATING = "GENERATING", "Generating"
         AWAITING_ANSWERS = "AWAITING_ANSWERS", "Awaiting answers"
-        SYNTHESIZING = "SYNTHESIZING", "Synthesizing"
         COMPLETED = "COMPLETED", "Completed"
         FAILED = "FAILED", "Failed"
-
-    class Block(models.TextChoices):
-        A = "A", "Block A"
-        B = "B", "Block B"
 
     class Stage(models.TextChoices):
         FOUNDATIONAL = "FOUNDATIONAL", "Foundational"
@@ -325,15 +210,8 @@ class DiagnosticSession(models.Model):
     )
     goal = models.CharField(max_length=32, choices=Goal.choices)
     target_role = models.CharField(max_length=255, blank=True, default="")
-    target_taxonomy = models.ForeignKey(
-        RoleTaxonomy,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="sessions",
-    )
-    selected_domains = models.ManyToManyField(
-        DomainTaxonomy,
+    selected_frameworks = models.ManyToManyField(
+        FrameworkTopic,
         blank=True,
         related_name="sessions",
     )
@@ -342,13 +220,7 @@ class DiagnosticSession(models.Model):
     status = models.CharField(
         max_length=32,
         choices=Status.choices,
-        default=Status.PENDING,
-    )
-    current_block = models.CharField(
-        max_length=8,
-        choices=Block.choices,
-        null=True,
-        blank=True,
+        default=Status.AWAITING_ANSWERS,
     )
     current_stage = models.CharField(
         max_length=32,
@@ -356,6 +228,7 @@ class DiagnosticSession(models.Model):
         null=True,
         blank=True,
     )
+    selection_log = models.JSONField(default=list, blank=True)
     synthesis = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -368,28 +241,31 @@ class DiagnosticSession(models.Model):
     def __str__(self) -> str:
         return f"DiagnosticSession<{self.id}:{self.goal}:{self.status}>"
 
-    @property
-    def low_stakes(self) -> bool:
-        return self.current_block == self.Block.B
-
 
 class SessionQuestion(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
         ASKED = "ASKED", "Asked"
         ANSWERED = "ANSWERED", "Answered"
+        REVEALED = "REVEALED", "Revealed"
+        SELF_RATED = "SELF_RATED", "Self rated"
 
     session = models.ForeignKey(
         DiagnosticSession,
         on_delete=models.CASCADE,
         related_name="questions",
     )
-    block = models.CharField(max_length=8, choices=DiagnosticSession.Block.choices)
-    stage = models.CharField(max_length=32, choices=DiagnosticSession.Stage.choices)
+    content_question = models.ForeignKey(
+        Question,
+        on_delete=models.PROTECT,
+        related_name="session_instances",
+    )
+    stage = models.CharField(
+        max_length=32,
+        choices=DiagnosticSession.Stage.choices,
+    )
     order = models.PositiveIntegerField(default=1)
     competency_area = models.CharField(max_length=255, blank=True, default="")
-    question_text = models.TextField()
-    metadata = models.JSONField(default=dict, blank=True)
     status = models.CharField(
         max_length=32,
         choices=Status.choices,
@@ -399,10 +275,10 @@ class SessionQuestion(models.Model):
 
     class Meta:
         ordering = ["order", "id"]
-        unique_together = ("session", "block", "stage", "order")
+        unique_together = ("session", "stage", "order")
 
     def __str__(self) -> str:
-        return f"SessionQuestion<{self.session_id}:{self.block}:{self.stage}:{self.order}>"
+        return f"SessionQuestion<{self.session_id}:{self.stage}:{self.order}>"
 
 
 class SessionAnswer(models.Model):
@@ -412,8 +288,14 @@ class SessionAnswer(models.Model):
         related_name="answer",
     )
     answer_text = models.TextField(blank=True, default="")
-    exposure_confirmed = models.BooleanField(null=True, blank=True)
+    choice_id = models.PositiveIntegerField(null=True, blank=True)
+    is_correct = models.BooleanField(null=True, blank=True)
+    confidence_rating = models.PositiveSmallIntegerField(null=True, blank=True)
+    self_rated_alignment = models.JSONField(null=True, blank=True)
+    grading_detail = models.JSONField(default=dict, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
+    revealed_at = models.DateTimeField(null=True, blank=True)
+    self_rated_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self) -> str:
         return f"SessionAnswer<{self.question_id}>"
@@ -428,7 +310,6 @@ class DiagnosticRoadmapItem(models.Model):
         DIAGNOSE = "DIAGNOSE", "Diagnose"
         ARCHITECT = "ARCHITECT", "Architect"
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
-        USE_AI = "USE_AI", "Use AI"
         COMMUNICATE = "COMMUNICATE", "Communicate"
 
     session = models.ForeignKey(

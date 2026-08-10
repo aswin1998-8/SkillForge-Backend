@@ -3,184 +3,105 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from apps.diagnostics.models import (
-    Diagnostic,
-    DiagnosticAnswer,
-    DiagnosticAttempt,
-    DiagnosticQuestion,
-    DiagnosticResult,
+    CodingTestCase,
     DiagnosticRoadmapItem,
     DiagnosticSession,
-    DiagnosticTurn,
+    FrameworkTopic,
+    FundamentalsTopic,
+    Question,
+    QuestionChoice,
+    ReferenceAnswer,
     SessionAnswer,
     SessionQuestion,
 )
-from apps.roles.serializers import SkillSerializer
 
 
-class DiagnosticQuestionSerializer(serializers.ModelSerializer):
-    skill = SkillSerializer(read_only=True)
+class FrameworkTopicSerializer(serializers.ModelSerializer):
+    fundamentals_language = serializers.CharField(
+        source="fundamentals_topic.language_family",
+        read_only=True,
+    )
 
     class Meta:
-        model = DiagnosticQuestion
+        model = FrameworkTopic
         fields = (
             "id",
-            "text",
-            "question_type",
-            "skill",
-            "difficulty",
-            "ordering",
+            "framework_name",
+            "fundamentals_language",
+            "competency_areas",
         )
 
 
-class DiagnosticSerializer(serializers.ModelSerializer):
-    questions = DiagnosticQuestionSerializer(many=True, read_only=True)
-
+class QuestionChoiceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Diagnostic
-        fields = ("id", "title", "description", "is_active", "questions")
+        model = QuestionChoice
+        fields = ("id", "choice_text")
 
 
-class DiagnosticAnswerSerializer(serializers.ModelSerializer):
-    question_id = serializers.IntegerField(source="question.id", read_only=True)
-
+class CodingTestCasePublicSerializer(serializers.ModelSerializer):
     class Meta:
-        model = DiagnosticAnswer
-        fields = ("id", "question_id", "answer_text", "updated_at")
-
-
-class DiagnosticResultSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DiagnosticResult
-        fields = (
-            "strengths",
-            "gaps",
-            "evidence",
-            "skill_findings",
-            "recommended_focus",
-            "created_at",
-        )
-
-
-class DiagnosticTurnSerializer(serializers.ModelSerializer):
-    skill = SkillSerializer(read_only=True)
-    prompt_text = serializers.SerializerMethodField()
-
-    class Meta:
-        model = DiagnosticTurn
-        fields = (
-            "id",
-            "ordering",
-            "stage",
-            "skill",
-            "difficulty",
-            "question_type",
-            "prompt_text",
-            "question_payload",
-            "answer_text",
-            "evaluation",
-            "status",
-            "created_at",
-            "updated_at",
-        )
-
-    def get_prompt_text(self, obj: DiagnosticTurn) -> str:
-        return (obj.question_payload or {}).get("prompt_text") or ""
-
-
-class DiagnosticAttemptSerializer(serializers.ModelSerializer):
-    answers = DiagnosticAnswerSerializer(many=True, read_only=True)
-    turns = DiagnosticTurnSerializer(many=True, read_only=True)
-    result = DiagnosticResultSerializer(read_only=True)
-    diagnostic_id = serializers.IntegerField(source="diagnostic.id", read_only=True)
-    diagnostic_title = serializers.CharField(source="diagnostic.title", read_only=True)
-    active_turn = serializers.SerializerMethodField()
-
-    class Meta:
-        model = DiagnosticAttempt
-        fields = (
-            "id",
-            "diagnostic_id",
-            "diagnostic_title",
-            "status",
-            "goal",
-            "current_stage",
-            "stage_history",
-            "active_turn_id",
-            "active_turn",
-            "skill_scores",
-            "transfer_report",
-            "gap_report",
-            "started_at",
-            "completed_at",
-            "answers",
-            "turns",
-            "result",
-        )
-
-    def get_active_turn(self, obj: DiagnosticAttempt):
-        turn = None
-        if obj.active_turn_id:
-            turn = next((t for t in obj.turns.all() if t.id == obj.active_turn_id), None)
-        if turn is None:
-            turn = next(
-                (t for t in obj.turns.all() if t.status == DiagnosticTurn.Status.ASKED),
-                None,
-            )
-        if turn is None:
-            return None
-        return DiagnosticTurnSerializer(turn).data
-
-
-class SaveAnswersSerializer(serializers.Serializer):
-    answers = serializers.ListField(child=serializers.DictField(), allow_empty=False)
-
-    def validate_answers(self, value: list) -> list:
-        cleaned: list[dict] = []
-        for item in value:
-            if "question_id" not in item:
-                raise serializers.ValidationError("Each answer requires question_id.")
-            cleaned.append(
-                {
-                    "question_id": int(item["question_id"]),
-                    "answer_text": str(item.get("answer_text") or ""),
-                }
-            )
-        return cleaned
-
-
-class SubmitTurnSerializer(serializers.Serializer):
-    turn_id = serializers.IntegerField()
-    answer_text = serializers.CharField(allow_blank=True, max_length=12000)
+        model = CodingTestCase
+        fields = ("id", "input", "order")
 
 
 class SessionAnswerSerializer(serializers.ModelSerializer):
     class Meta:
         model = SessionAnswer
-        fields = ("id", "answer_text", "exposure_confirmed", "submitted_at")
+        fields = (
+            "id",
+            "answer_text",
+            "choice_id",
+            "is_correct",
+            "confidence_rating",
+            "self_rated_alignment",
+            "grading_detail",
+            "submitted_at",
+            "revealed_at",
+            "self_rated_at",
+        )
 
 
 class SessionQuestionSerializer(serializers.ModelSerializer):
     answer = SessionAnswerSerializer(read_only=True)
-    question_type = serializers.SerializerMethodField()
+    question_text = serializers.CharField(source="content_question.question_text")
+    modality = serializers.CharField(source="content_question.modality")
+    difficulty_tier = serializers.IntegerField(source="content_question.difficulty_tier")
+    language = serializers.CharField(source="content_question.language")
+    choices = serializers.SerializerMethodField()
+    test_cases = serializers.SerializerMethodField()
 
     class Meta:
         model = SessionQuestion
         fields = (
             "id",
-            "block",
             "stage",
             "order",
             "competency_area",
-            "question_text",
-            "question_type",
-            "metadata",
             "status",
+            "question_text",
+            "modality",
+            "difficulty_tier",
+            "language",
+            "choices",
+            "test_cases",
             "answer",
             "created_at",
         )
 
-    def get_question_type(self, obj) -> str:
-        return (obj.metadata or {}).get("question_type") or "FREE_TEXT"
+    def get_choices(self, obj: SessionQuestion) -> list[dict]:
+        if obj.content_question.modality != Question.Modality.FOUNDATIONAL:
+            return []
+        return QuestionChoiceSerializer(
+            obj.content_question.choices.all(),
+            many=True,
+        ).data
+
+    def get_test_cases(self, obj: SessionQuestion) -> list[dict]:
+        modality = obj.content_question.modality
+        if modality not in {Question.Modality.CODING, Question.Modality.FIND_ISSUES}:
+            return []
+        visible = obj.content_question.test_cases.filter(is_hidden=False)
+        return CodingTestCasePublicSerializer(visible, many=True).data
 
 
 class DiagnosticRoadmapItemSerializer(serializers.ModelSerializer):
@@ -200,10 +121,7 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
     current_questions = serializers.SerializerMethodField()
     roadmap_items = DiagnosticRoadmapItemSerializer(many=True, read_only=True)
-    low_stakes = serializers.BooleanField(read_only=True)
-    target_taxonomy_id = serializers.IntegerField(read_only=True, allow_null=True)
-    target_taxonomy_name = serializers.SerializerMethodField()
-    selected_domains = serializers.SerializerMethodField()
+    selected_frameworks = serializers.SerializerMethodField()
 
     class Meta:
         model = DiagnosticSession
@@ -211,15 +129,12 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
             "id",
             "goal",
             "target_role",
-            "target_taxonomy_id",
-            "target_taxonomy_name",
-            "selected_domains",
+            "selected_frameworks",
             "assessment_competencies",
             "current_role",
             "status",
-            "current_block",
             "current_stage",
-            "low_stakes",
+            "selection_log",
             "synthesis",
             "error",
             "questions",
@@ -230,37 +145,39 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
             "completed_at",
         )
 
-    def get_target_taxonomy_name(self, obj) -> str | None:
-        tax = getattr(obj, "target_taxonomy", None)
-        return tax.role_name if tax is not None else None
-
-    def get_selected_domains(self, obj) -> list[dict]:
+    def get_selected_frameworks(self, obj) -> list[dict]:
         return [
-            {"slug": d.slug, "domain_name": d.domain_name}
-            for d in obj.selected_domains.all()
+            {
+                "slug": fw.framework_name,
+                "name": fw.get_framework_name_display(),
+            }
+            for fw in obj.selected_frameworks.all()
         ]
 
     def get_questions(self, obj):
         return SessionQuestionSerializer(obj.questions.all(), many=True).data
 
     def get_current_questions(self, obj):
-        if not obj.current_block or not obj.current_stage:
+        if not obj.current_stage:
             return []
         qs = obj.questions.filter(
-            block=obj.current_block,
             stage=obj.current_stage,
-            status=SessionQuestion.Status.ASKED,
+            status__in=[
+                SessionQuestion.Status.ASKED,
+                SessionQuestion.Status.ANSWERED,
+                SessionQuestion.Status.REVEALED,
+            ],
         ).order_by("order")
         return SessionQuestionSerializer(qs, many=True).data
 
 
 class StartDiagnosticSessionSerializer(serializers.Serializer):
     goal = serializers.ChoiceField(choices=["sharpen_current", "switch_role"])
-    domain_slugs = serializers.ListField(
+    framework_slugs = serializers.ListField(
         child=serializers.CharField(max_length=64),
-        required=False,
-        allow_empty=True,
+        allow_empty=False,
     )
+
 
 class SubmitSessionAnswersSerializer(serializers.Serializer):
     answers = serializers.ListField(child=serializers.DictField(), allow_empty=False)
@@ -274,6 +191,21 @@ class SubmitSessionAnswersSerializer(serializers.Serializer):
                 {
                     "question_id": int(item["question_id"]),
                     "answer_text": str(item.get("answer_text") or ""),
+                    "choice_id": int(item["choice_id"]) if item.get("choice_id") else None,
+                    "confidence_rating": (
+                        int(item["confidence_rating"])
+                        if item.get("confidence_rating") is not None
+                        else None
+                    ),
                 }
             )
         return cleaned
+
+
+class SelfRateAnswerSerializer(serializers.Serializer):
+    rubric_alignment = serializers.DictField(child=serializers.CharField())
+
+
+class RunTestsSerializer(serializers.Serializer):
+    question_id = serializers.IntegerField()
+    code = serializers.CharField(allow_blank=False)

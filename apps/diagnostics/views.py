@@ -5,139 +5,40 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
 from rest_framework.views import APIView
 
 from apps.core.responses import success_response
-from apps.diagnostics.adaptive import ensure_next_turn, submit_turn_answer
+from apps.diagnostics.models import FrameworkTopic
 from apps.diagnostics.serializers import (
-    DiagnosticAttemptSerializer,
-    DiagnosticSerializer,
     DiagnosticSessionSerializer,
-    SaveAnswersSerializer,
+    FrameworkTopicSerializer,
+    RunTestsSerializer,
+    SelfRateAnswerSerializer,
     StartDiagnosticSessionSerializer,
     SubmitSessionAnswersSerializer,
-    SubmitTurnSerializer,
 )
-from apps.diagnostics.block_assessment import (
+from apps.diagnostics.session_service import (
     get_session_for_user,
+    reveal_answer,
+    run_tests_preview,
+    self_rate_answer,
     start_session,
     submit_stage_answers,
 )
-from apps.diagnostics.services import (
-    get_active_diagnostics,
-    get_attempt_for_user,
-    get_diagnostic_or_404,
-    save_answers,
-    start_attempt,
-    submit_attempt,
-)
+from apps.diagnostics.topic_defaults import ensure_default_topics
 
 
-class AIRateThrottle(UserRateThrottle):
-    scope = "ai"
-
-
-class DiagnosticListView(APIView):
+class FrameworkTopicListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        diagnostics = get_active_diagnostics()
-        return success_response(DiagnosticSerializer(diagnostics, many=True).data)
-
-
-class DiagnosticDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request: Request, diagnostic_id: int) -> Response:
-        diagnostic = get_diagnostic_or_404(diagnostic_id)
-        return success_response(DiagnosticSerializer(diagnostic).data)
-
-
-class DiagnosticStartView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
-
-    def post(self, request: Request, diagnostic_id: int) -> Response:
-        attempt = start_attempt(user=request.user, diagnostic_id=diagnostic_id)
-        attempt = get_attempt_for_user(user=request.user, attempt_id=attempt.id)
-        return success_response(
-            DiagnosticAttemptSerializer(attempt).data,
-            message="Attempt started",
-            status=status.HTTP_201_CREATED,
-        )
-
-
-class AttemptAnswersView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request: Request, attempt_id: int) -> Response:
-        serializer = SaveAnswersSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        attempt = save_answers(
-            user=request.user,
-            attempt_id=attempt_id,
-            answers=serializer.validated_data["answers"],
-        )
-        return success_response(
-            DiagnosticAttemptSerializer(attempt).data,
-            message="Answers saved",
-        )
-
-
-class AttemptSubmitView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
-
-    def post(self, request: Request, attempt_id: int) -> Response:
-        attempt = submit_attempt(user=request.user, attempt_id=attempt_id)
-        return success_response(
-            DiagnosticAttemptSerializer(attempt).data,
-            message="Attempt submitted for processing",
-        )
-
-
-class AttemptDetailView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request: Request, attempt_id: int) -> Response:
-        attempt = get_attempt_for_user(user=request.user, attempt_id=attempt_id)
-        return success_response(DiagnosticAttemptSerializer(attempt).data)
-
-
-class AttemptNextView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
-
-    def post(self, request: Request, attempt_id: int) -> Response:
-        attempt = get_attempt_for_user(user=request.user, attempt_id=attempt_id)
-        ensure_next_turn(attempt=attempt)
-        attempt = get_attempt_for_user(user=request.user, attempt_id=attempt_id)
-        return success_response(DiagnosticAttemptSerializer(attempt).data)
-
-
-class AttemptTurnSubmitView(APIView):
-    permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
-
-    def post(self, request: Request, attempt_id: int) -> Response:
-        serializer = SubmitTurnSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        attempt = submit_turn_answer(
-            user=request.user,
-            attempt_id=attempt_id,
-            turn_id=serializer.validated_data["turn_id"],
-            answer_text=serializer.validated_data["answer_text"],
-        )
-        return success_response(
-            DiagnosticAttemptSerializer(attempt).data,
-            message="Turn submitted",
-        )
+        ensure_default_topics()
+        topics = FrameworkTopic.objects.select_related("fundamentals_topic").all()
+        return success_response(FrameworkTopicSerializer(topics, many=True).data)
 
 
 class DiagnosticSessionListCreateView(APIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
 
     def post(self, request: Request) -> Response:
         serializer = StartDiagnosticSessionSerializer(data=request.data)
@@ -146,7 +47,7 @@ class DiagnosticSessionListCreateView(APIView):
             session = start_session(
                 user=request.user,
                 goal=serializer.validated_data["goal"],
-                domain_slugs=serializer.validated_data.get("domain_slugs") or [],
+                framework_slugs=serializer.validated_data["framework_slugs"],
             )
         except ValidationError as exc:
             detail = getattr(exc, "detail", exc)
@@ -180,7 +81,6 @@ class DiagnosticSessionDetailView(APIView):
 
 class DiagnosticSessionAnswersView(APIView):
     permission_classes = [IsAuthenticated]
-    throttle_classes = [AIRateThrottle]
 
     def post(self, request: Request, session_id: int) -> Response:
         serializer = SubmitSessionAnswersSerializer(data=request.data)
@@ -190,8 +90,53 @@ class DiagnosticSessionAnswersView(APIView):
             session_id=session_id,
             answers=serializer.validated_data["answers"],
         )
-        session = get_session_for_user(user=request.user, session_id=session.id)
         return success_response(
             DiagnosticSessionSerializer(session).data,
             message="Answers submitted",
         )
+
+
+class DiagnosticSessionAnswerRevealView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, session_id: int, answer_id: int) -> Response:
+        payload = reveal_answer(
+            user=request.user,
+            session_id=session_id,
+            answer_id=answer_id,
+        )
+        return success_response(payload, message="Reference answer revealed")
+
+
+class DiagnosticSessionAnswerSelfRateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, session_id: int, answer_id: int) -> Response:
+        serializer = SelfRateAnswerSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        answer = self_rate_answer(
+            user=request.user,
+            session_id=session_id,
+            answer_id=answer_id,
+            rubric_alignment=serializer.validated_data["rubric_alignment"],
+        )
+        session = get_session_for_user(user=request.user, session_id=session_id)
+        return success_response(
+            DiagnosticSessionSerializer(session).data,
+            message="Self-rating recorded",
+        )
+
+
+class DiagnosticSessionRunTestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, session_id: int) -> Response:
+        serializer = RunTestsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        results = run_tests_preview(
+            user=request.user,
+            session_id=session_id,
+            question_id=serializer.validated_data["question_id"],
+            code=serializer.validated_data["code"],
+        )
+        return success_response({"test_results": results})

@@ -1,4 +1,4 @@
-"""Diagnostic, challenge, debrief, and roadmap flow tests."""
+"""Diagnostic, challenge, and roadmap flow tests."""
 
 from __future__ import annotations
 
@@ -6,8 +6,7 @@ import pytest
 from rest_framework.test import APIClient
 
 from apps.challenges.models import Challenge, ChallengeSkill, DailyChallenge
-from apps.diagnostics.models import Diagnostic, DiagnosticQuestion
-from apps.debriefs.models import DebriefSession
+from apps.diagnostics.topic_defaults import ensure_default_topics
 from apps.gaps.models import UserSkillGap
 from apps.roles.models import Role, RoleSkill, Skill
 from apps.users.models import Profile, User
@@ -20,31 +19,23 @@ def api() -> APIClient:
 
 @pytest.fixture
 def seeded(db):
-    role = Role.objects.create(name="AI Engineer", slug="ai-engineer", description="AI")
-    skill = Skill.objects.create(name="RAG", slug="rag", description="RAG")
+    ensure_default_topics()
+    from django.core.management import call_command
+
+    call_command("import_questions", file="content/sample_questions.json")
+
+    role = Role.objects.create(name="Frontend Developer", slug="frontend-developer", description="FE")
+    skill = Skill.objects.create(name="React", slug="react", description="React")
     RoleSkill.objects.create(role=role, skill=skill, importance=5)
-    diagnostic = Diagnostic.objects.create(
-        title="Baseline",
-        description="Test diagnostic",
-        is_active=True,
-    )
-    question = DiagnosticQuestion.objects.create(
-        diagnostic=diagnostic,
-        text="How would you evaluate retrieval quality?",
-        question_type="FREE_TEXT",
-        skill=skill,
-        difficulty=2,
-        ordering=1,
-    )
     challenge = Challenge.objects.create(
-        title="RAG Theory",
-        slug="rag-theory",
-        description="Explain chunking",
+        title="React Theory",
+        slug="react-theory",
+        description="Explain reconciliation",
         modality=Challenge.Modality.THEORY,
         difficulty=1,
         estimated_duration_minutes=20,
-        scenario="Team proposes fixed chunks",
-        requirements=["Explain trade-offs"],
+        scenario="Team asks about keys",
+        requirements=["Explain reconciliation"],
         constraints=["Under 500 words"],
         workspace_config={"editor": "markdown"},
         is_active=True,
@@ -55,8 +46,8 @@ def seeded(db):
     user = User.objects.create_user(email="flow@skillforge.test", password="testpass123")
     ensure_user_side_effects(user)
     Profile.objects.filter(user=user).update(
-        current_role="Frontend",
-        technical_goal="AI Engineer",
+        current_role="Frontend Developer",
+        technical_goal="Sharpen React",
         target_role=role,
         onboarding_completed=True,
     )
@@ -64,37 +55,22 @@ def seeded(db):
         "user": user,
         "role": role,
         "skill": skill,
-        "diagnostic": diagnostic,
-        "question": question,
         "challenge": challenge,
     }
 
 
 @pytest.mark.django_db
-def test_diagnostic_submit_creates_gaps(api: APIClient, seeded) -> None:
+def test_diagnostic_session_start(api: APIClient, seeded) -> None:
     user = seeded["user"]
     api.force_authenticate(user=user)
-    start = api.post(f"/api/v1/diagnostics/{seeded['diagnostic'].id}/start/")
-    assert start.status_code == 201
-    attempt_id = start.data["data"]["id"]
-
-    answers = api.post(
-        f"/api/v1/attempts/{attempt_id}/answers/",
-        {"answers": [{"question_id": seeded["question"].id, "answer_text": "Use nDCG and human review."}]},
+    start = api.post(
+        "/api/v1/diagnostic-sessions/",
+        {"goal": "sharpen_current", "framework_slugs": ["react"]},
         format="json",
     )
-    assert answers.status_code == 200
-
-    submit = api.post(f"/api/v1/attempts/{attempt_id}/submit/")
-    assert submit.status_code == 200
-
-    # Celery task may run eagerly if configured; invoke synchronously for test certainty
-    from apps.diagnostics.tasks import generate_diagnostic_result
-
-    generate_diagnostic_result(attempt_id)
-    detail = api.get(f"/api/v1/attempts/{attempt_id}/")
-    assert detail.status_code == 200
-    assert detail.data["data"]["status"] in {"COMPLETED", "PROCESSING", "SUBMITTED"}
+    assert start.status_code == 201
+    assert start.data["data"]["status"] == "AWAITING_ANSWERS"
+    assert len(start.data["data"]["current_questions"]) > 0
 
 
 @pytest.mark.django_db
@@ -110,34 +86,18 @@ def test_daily_challenge_one_per_day(api: APIClient, seeded) -> None:
 
 
 @pytest.mark.django_db
-def test_challenge_submit_starts_debrief(api: APIClient, seeded) -> None:
+def test_challenge_submit_completes(api: APIClient, seeded) -> None:
     user = seeded["user"]
     api.force_authenticate(user=user)
     today = api.get("/api/v1/challenges/today/")
     challenge_id = today.data["data"]["challenge"]["id"]
     submit = api.post(
         f"/api/v1/challenges/{challenge_id}/submit/",
-        {"text_answer": "Chunk by semantic sections; evaluate with recall@k."},
+        {"text_answer": "Keys help React track list identity across renders."},
         format="json",
     )
     assert submit.status_code in {200, 201}
-    attempt_id = submit.data["data"]["id"]
-    assert "submission" in submit.data["data"] or submit.data["data"].get("status")
-
-    session = DebriefSession.objects.filter(attempt_id=attempt_id).first()
-    if session is None:
-        from apps.challenges.models import ChallengeAttempt
-        from apps.debriefs.services import start_debrief_for_attempt
-
-        attempt = ChallengeAttempt.objects.get(id=attempt_id)
-        session = start_debrief_for_attempt(attempt_id=attempt.id)
-
-    from apps.debriefs.tasks import generate_debrief_question
-
-    generate_debrief_question(session.id)
-    session.refresh_from_db()
-    detail = api.get(f"/api/v1/debriefs/{session.id}/")
-    assert detail.status_code == 200
+    assert submit.data["data"]["status"] == "COMPLETED"
 
 
 @pytest.mark.django_db

@@ -117,7 +117,7 @@ def submit_challenge(
         },
     )
 
-    attempt.status = ChallengeAttempt.Status.SUBMITTED
+    attempt.status = ChallengeAttempt.Status.COMPLETED
     attempt.completed_at = timezone.now()
     attempt.save(update_fields=["status", "completed_at"])
 
@@ -135,17 +135,6 @@ def submit_challenge(
         summary=f"Submitted {challenge.modality} challenge",
     )
 
-    from apps.debriefs.services import start_debrief_for_attempt
-
-    debrief_session = start_debrief_for_attempt(attempt_id=attempt.id)
-
-    from apps.challenges.tasks import evaluate_challenge_submission
-
-    attempt_id = attempt.id
-    transaction.on_commit(lambda: evaluate_challenge_submission.delay(attempt_id))
-
-    # Attach for serializer consumers
-    attempt._debrief_session_id = debrief_session.id  # type: ignore[attr-defined]
     return attempt
 
 

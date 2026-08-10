@@ -1,81 +1,64 @@
 # SkillForge Backend
 
-Django REST API for SkillForge — a technical mastery platform for developers.
+Django REST API for Honed — a technical mastery platform for software engineers.
 
 ## Stack
 
 - Django 5 + Django REST Framework
 - PostgreSQL
-- Redis + Celery
+- Redis + Celery (email and background tasks only — no runtime AI)
 - SimpleJWT in HttpOnly cookies
-- AI provider abstraction (Claude, with mock fallback)
+- Static diagnostic content with rule-based adaptive selection
 - OpenAPI via drf-spectacular (`/api/docs/`)
 
-## Local setup (no Docker)
-
-### 1. Homebrew services
-
-```bash
-brew install postgresql@16 redis
-brew services start postgresql@16
-brew services start redis
-```
-
-This project expects Homebrew Postgres on **port 5433** (default when another Postgres already uses 5432):
-
-```bash
-export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"
-createdb -p 5433 skillforge
-```
-
-### 2. Python env
+## Local setup
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements/dev.txt
 cp .env.example .env
-# Edit DATABASE_URL if needed
-```
-
-### 3. Migrate & seed
-
-```bash
 python manage.py migrate
 python manage.py seed_data
-```
-
-### 4. Run API + Celery
-
-```bash
 python manage.py runserver 8000
-celery -A config worker -l info
 ```
 
-Health check: [http://127.0.0.1:8000/api/v1/health/](http://127.0.0.1:8000/api/v1/health/)  
-API docs: [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/)
+## Static diagnostic content
 
-### 5. Tests
+All diagnostic questions are manually authored and imported as static data.
+
+- **Admin:** `/admin/` — `FundamentalsTopic`, `FrameworkTopic`, `Question`, and related models
+- **Bulk import:** `python manage.py import_questions --file content/sample_questions.json`
+
+Frameworks covered: React, Next.js, Django, FastAPI (with JS/Python fundamentals layers).
+
+## Code execution (coding / find_issues modalities)
+
+Coding answers are graded by running user code via **process-level subprocess execution** with:
+
+- Hard timeout (`CODE_EXECUTION_TIMEOUT_SECONDS`, default 5s)
+- AST import blocklist for Python (blocks `os`, `subprocess`, `socket`, etc.)
+- Identifier blocklist for JavaScript
+- Output size caps
+
+**Security note:** Process-level execution is suitable for authenticated MVP users only. It is not safe against determined escape attempts from untrusted public input. Plan to upgrade to Docker or Judge0 before opening coding execution to anonymous users.
+
+Disable execution entirely with `CODE_EXECUTION_ENABLED=False`.
+
+User code should define `solve(input)` returning the answer; the harness prints the result for comparison against `CodingTestCase.expected_output`.
+
+## Adaptive selection
+
+Rule-based (not AI). Tunable via env vars:
+
+- `ADAPTIVE_WEAK_THRESHOLD` (default 0.4)
+- `ADAPTIVE_STRONG_THRESHOLD` (default 0.7)
+- `ADAPTIVE_ROLLING_WINDOW` (default 5)
+
+Selection decisions are logged on `DiagnosticSession.selection_log` for inspection.
+
+## Tests
 
 ```bash
 pytest
 ```
-
-## Auth
-
-- `POST /api/v1/auth/register/`
-- `POST /api/v1/auth/login/`
-- `POST /api/v1/auth/google/` (GIS ID token)
-- `POST /api/v1/auth/logout/`
-- `POST /api/v1/auth/refresh/`
-- `GET /api/v1/auth/me/`
-
-JWT access/refresh tokens are set as HttpOnly cookies (`sf_access`, `sf_refresh`).
-
-## AI
-
-Set `CLAUDE_API_KEY` in `.env` to use Claude. If empty, `MockAIProvider` is used so local flows work offline.
-
-## Production (EC2)
-
-See [docs/EC2_DEPLOY.md](docs/EC2_DEPLOY.md).

@@ -1,0 +1,125 @@
+{
+  "questions": [
+    {
+      "framework": "react",
+      "competency_area": "hooks",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "When does a useEffect cleanup function run?",
+      "choices": [
+        { "text": "Before the effect re-runs and on unmount", "is_correct": true },
+        { "text": "Only on the first mount", "is_correct": false },
+        { "text": "After every render", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "react",
+      "competency_area": "state_management",
+      "modality": "scenario",
+      "difficulty_tier": 2,
+      "question_text": "A dashboard refetches the same user profile in five child components after every navigation. Explain what is going wrong and how you would fix it.",
+      "reference_answer": {
+        "text": "Multiple isolated effects or prop drilling cause duplicate requests. Lift data fetching to a shared cache/provider or use a data library with request deduplication.",
+        "rubric_points": [
+          "Identifies duplicate fetching across components",
+          "Proposes shared cache or context/provider",
+          "Mentions deduplication or stale-while-revalidate"
+        ]
+      }
+    },
+    {
+      "framework": "react",
+      "competency_area": "rendering",
+      "modality": "coding",
+      "difficulty_tier": 2,
+      "language": "javascript",
+      "question_text": "Implement solve(input) where input is a JSON array of numbers. Return the sum of positive numbers.",
+      "test_cases": [
+        { "input": "[]", "expected_output": "0", "is_hidden": false },
+        { "input": "[1,-2,3,3]", "expected_output": "7", "is_hidden": false }
+      ]
+    },
+    {
+      "fundamentals": "javascript",
+      "competency_area": "closures",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "What is a closure in JavaScript?",
+      "choices": [
+        { "text": "A function retaining access to variables from its lexical scope", "is_correct": true },
+        { "text": "A way to close browser tabs programmatically", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "nextjs",
+      "competency_area": "routing",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "In the App Router, which file defines UI shared across routes in a segment?",
+      "choices": [
+        { "text": "layout.tsx", "is_correct": true },
+        { "text": "middleware.ts", "is_correct": false },
+        { "text": "route.ts", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "django",
+      "competency_area": "models_orm",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "Which Django field type stores a foreign key relationship?",
+      "choices": [
+        { "text": "ForeignKey", "is_correct": true },
+        { "text": "ManyToManyField only", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "django",
+      "competency_area": "views_api",
+      "modality": "coding",
+      "difficulty_tier": 2,
+      "language": "python",
+      "question_text": "Implement solve(input) where input is a name string. Return 'Hello, {name}!'.",
+      "test_cases": [
+        { "input": "World", "expected_output": "Hello, World!", "is_hidden": false }
+      ]
+    },
+    {
+      "framework": "fastapi",
+      "competency_area": "validation",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "Which library does FastAPI commonly use for request/response validation?",
+      "choices": [
+        { "text": "Pydantic", "is_correct": true },
+        { "text": "Marshmallow only", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "fastapi",
+      "competency_area": "async",
+      "modality": "defend",
+      "difficulty_tier": 3,
+      "question_text": "A teammate wants every FastAPI endpoint declared async even when it only performs blocking DB calls. Defend or push back.",
+      "reference_answer": {
+        "text": "Blind async on blocking work can reduce throughput; use async for truly non-blocking I/O or run blocking work in a threadpool.",
+        "rubric_points": [
+          "Explains blocking work inside async endpoints",
+          "Mentions threadpool or sync endpoints",
+          "Connects recommendation to event loop behavior"
+        ]
+      }
+    },
+    {
+      "fundamentals": "python",
+      "competency_area": "data_structures",
+      "modality": "find_issues",
+      "difficulty_tier": 2,
+      "language": "python",
+      "question_text": "Fix the function so it returns the unique values preserving order.",
+      "test_cases": [
+        { "input": "", "expected_output": "[1, 2, 3]", "is_hidden": false }
+      ]
+    }
+  ]
+}
