@@ -1,8 +1,15 @@
-"""Deterministic and self-rated grading for diagnostic answers."""
+"""Deterministic grading for diagnostic answers."""
 
 from __future__ import annotations
 
-from apps.diagnostics.models import Question, QuestionChoice, SessionAnswer, SessionQuestion
+from apps.core.keyword_grade import grade_open_ended_keywords
+from apps.diagnostics.models import (
+    Question,
+    QuestionChoice,
+    ReferenceAnswer,
+    SessionAnswer,
+    SessionQuestion,
+)
 
 
 def grade_foundational(
@@ -80,6 +87,7 @@ def is_open_ended(modality: str) -> bool:
 
 
 def compute_open_ended_score(self_rated_alignment: dict | None) -> float | None:
+    """Legacy self-rate score (kept for older answers)."""
     if not self_rated_alignment:
         return None
     if not isinstance(self_rated_alignment, dict):
@@ -97,6 +105,18 @@ def compute_open_ended_score(self_rated_alignment: dict | None) -> float | None:
     return score / total
 
 
+def keyword_score_from_detail(grading_detail: dict | None) -> float | None:
+    if not isinstance(grading_detail, dict):
+        return None
+    method = grading_detail.get("method")
+    if method not in {"keyword_rubric", "keyword_reference_overlap"}:
+        return None
+    try:
+        return float(grading_detail.get("score"))
+    except (TypeError, ValueError):
+        return None
+
+
 def answer_score_for_adaptive(answer: SessionAnswer) -> float | None:
     question = answer.question.content_question
     modality = question.modality
@@ -112,6 +132,9 @@ def answer_score_for_adaptive(answer: SessionAnswer) -> float | None:
         return 1.0 if answer.is_correct else 0.0
 
     if is_open_ended(modality):
+        keyword_score = keyword_score_from_detail(answer.grading_detail)
+        if keyword_score is not None:
+            return keyword_score
         return compute_open_ended_score(answer.self_rated_alignment)
 
     return None
@@ -158,9 +181,19 @@ def grade_session_answer(
         session_question.status = SessionQuestion.Status.ANSWERED
 
     elif is_open_ended(modality):
-        if confidence_rating is None:
-            raise ValueError("confidence_rating required for open-ended questions")
-        answer.grading_detail = {"method": "self_rate_pending"}
+        try:
+            ref = content.reference_answer
+        except ReferenceAnswer.DoesNotExist:
+            ref = None
+        rubric_points = list(getattr(ref, "rubric_points", None) or []) if ref else []
+        reference_text = getattr(ref, "reference_text", None) if ref else None
+        is_correct, _score, detail = grade_open_ended_keywords(
+            answer_text=answer_text,
+            rubric_points=rubric_points,
+            reference_text=reference_text,
+        )
+        answer.is_correct = is_correct
+        answer.grading_detail = detail
         session_question.status = SessionQuestion.Status.ANSWERED
 
     answer.save()

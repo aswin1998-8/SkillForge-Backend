@@ -144,11 +144,11 @@ def _stage_fully_answered(session: DiagnosticSession, stage: str) -> bool:
             sq.answer
         except SessionAnswer.DoesNotExist:
             return False
-        modality = sq.content_question.modality
-        if is_open_ended(modality):
-            if sq.status != SessionQuestion.Status.SELF_RATED:
-                return False
-        elif sq.status != SessionQuestion.Status.ANSWERED:
+        # All modalities complete on ANSWERED (keyword auto-grade for open-ended).
+        if sq.status not in {
+            SessionQuestion.Status.ANSWERED,
+            SessionQuestion.Status.SELF_RATED,
+        }:
             return False
     return True
 

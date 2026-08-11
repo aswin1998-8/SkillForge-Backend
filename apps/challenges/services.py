@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import date
 
 from django.db import transaction
@@ -104,13 +105,21 @@ def get_challenge_or_404(challenge_id: int) -> Challenge:
 def _preferred_difficulty(user: User) -> int | None:
     last = (
         ChallengeAttempt.objects.filter(user=user, status=ChallengeAttempt.Status.COMPLETED)
-        .select_related("debrief", "challenge")
+        .select_related("debrief", "challenge", "submission")
         .order_by("-completed_at")
         .first()
     )
     if last is None:
         return None
     base = last.challenge.difficulty
+    submission = getattr(last, "submission", None)
+    grading = (getattr(submission, "metadata", None) or {}).get("grading") or {}
+    score = grading.get("score")
+    if isinstance(score, (int, float)):
+        if score >= 0.7:
+            return min(base + 1, 5)
+        if score < 0.4:
+            return max(base - 1, 1)
     debrief = getattr(last, "debrief", None)
     if debrief and debrief.checklist_score is not None:
         if debrief.checklist_score >= 0.7:
@@ -300,9 +309,7 @@ def submit_challenge(
             daily.save(update_fields=["challenge", "status", "updated_at"])
 
     if daily.status in {DailyChallenge.Status.SUBMITTED, DailyChallenge.Status.COMPLETED}:
-        raise ValidationError(
-            "This challenge was already submitted. Finish the debrief to unlock the next one."
-        )
+        raise ValidationError("This challenge was already submitted.")
 
     already = ChallengeAttempt.objects.filter(
         user=user,
@@ -313,9 +320,7 @@ def submit_challenge(
         ],
     ).exists()
     if already:
-        raise ValidationError(
-            "This challenge was already submitted. Finish the debrief to unlock the next one."
-        )
+        raise ValidationError("This challenge was already submitted.")
 
     attempt = (
         ChallengeAttempt.objects.filter(
@@ -334,39 +339,66 @@ def submit_challenge(
             status=ChallengeAttempt.Status.IN_PROGRESS,
         )
 
+    text_answer = payload.get("text_answer") or ""
+    code = payload.get("code") or ""
+    architecture_data = payload.get("architecture_data") or {}
+    research_data = payload.get("research_data") or {}
+    metadata = dict(payload.get("metadata") or {})
+
+    grading = _grade_challenge_submission(
+        challenge=challenge,
+        text_answer=text_answer,
+        code=code,
+        architecture_data=architecture_data,
+        research_data=research_data,
+    )
+    metadata["grading"] = grading
+
     Submission.objects.update_or_create(
         attempt=attempt,
         defaults={
-            "text_answer": payload.get("text_answer") or "",
-            "code": payload.get("code") or "",
-            "architecture_data": payload.get("architecture_data") or {},
-            "research_data": payload.get("research_data") or {},
-            "metadata": payload.get("metadata") or {},
+            "text_answer": text_answer,
+            "code": code,
+            "architecture_data": architecture_data,
+            "research_data": research_data,
+            "metadata": metadata,
         },
     )
 
-    attempt.status = ChallengeAttempt.Status.SUBMITTED
+    # Auto-complete on submit — no confidence / debrief gate.
+    attempt.status = ChallengeAttempt.Status.COMPLETED
     attempt.completed_at = timezone.now()
     attempt.save(update_fields=["status", "completed_at"])
 
-    daily.status = DailyChallenge.Status.SUBMITTED
+    daily.status = DailyChallenge.Status.COMPLETED
     daily.save(update_fields=["status", "updated_at"])
-
-    ChallengeDebrief.objects.get_or_create(attempt=attempt)
 
     DiagnosticRoadmapItem.objects.filter(
         user=user,
         challenge=challenge,
-    ).exclude(status="closed").update(status="in_progress")
+    ).update(status="closed")
 
+    score = float(grading.get("score") or 0)
+    summary = (
+        f"Graded {challenge.modality}: score {score:.0%}"
+        if grading.get("score") is not None
+        else f"Completed {challenge.modality} challenge"
+    )
     _update_gaps_for_challenge(
         user=user,
         challenge=challenge,
-        status=UserSkillGap.Status.IN_PROGRESS,
+        status=UserSkillGap.Status.CLOSED,
         evidence_source_type="CHALLENGE_SUBMIT",
         evidence_source_id=str(attempt.id),
-        evidence_summary=f"Started practice on {challenge.title}",
+        evidence_summary=summary[:200],
     )
+
+    next_item = get_active_roadmap_item(user=user)
+    if next_item is not None and next_item.status != "in_progress":
+        next_item.status = "in_progress"
+        next_item.save(update_fields=["status"])
+
+    _maybe_increment_diagnostic_cycle(user=user)
 
     from apps.sessions.services import record_session
 
@@ -375,10 +407,91 @@ def submit_challenge(
         session_type="CHALLENGE",
         reference_id=attempt.id,
         title=f"Challenge: {challenge.title}",
-        summary=f"Submitted {challenge.modality} challenge",
+        summary=summary[:200],
     )
 
-    return attempt
+    return (
+        ChallengeAttempt.objects.select_related("submission", "challenge", "debrief")
+        .prefetch_related("challenge__rubric_items")
+        .get(pk=attempt.pk)
+    )
+
+
+def _grade_challenge_submission(
+    *,
+    challenge: Challenge,
+    text_answer: str,
+    code: str,
+    architecture_data: dict,
+    research_data: dict,
+) -> dict:
+    from types import SimpleNamespace
+
+    from apps.core.keyword_grade import grade_open_ended_keywords
+    from apps.diagnostics.code_executor import run_test_cases
+
+    modality = challenge.modality
+    config = challenge.workspace_config or {}
+    model = getattr(challenge, "model_answer", None)
+    reference_text = getattr(model, "reference_text", "") if model else ""
+    rubric_points = [i.text for i in challenge.rubric_items.all() if i.text]
+
+    if modality in {Challenge.Modality.CODING, Challenge.Modality.EXPLAIN_CODE}:
+        raw_cases = config.get("test_cases")
+        if isinstance(raw_cases, list) and raw_cases:
+            cases = []
+            for i, case in enumerate(raw_cases):
+                if not isinstance(case, dict):
+                    continue
+                cases.append(
+                    SimpleNamespace(
+                        input=str(case.get("input", "")),
+                        expected_output=str(case.get("expected_output", "")),
+                        is_hidden=bool(case.get("is_hidden", False)),
+                        order=int(case.get("order", i)),
+                    )
+                )
+            if cases:
+                language = str(config.get("language") or "python")
+                results = run_test_cases(
+                    code=code or text_answer,
+                    language=language,
+                    test_cases=cases,
+                )
+                passed = all(r.get("passed") for r in results) if results else False
+                score = 1.0 if passed else 0.0
+                return {
+                    "method": "test_execution",
+                    "score": score,
+                    "is_correct": passed,
+                    "test_results": results,
+                }
+
+        is_correct, score, detail = grade_open_ended_keywords(
+            answer_text=code or text_answer,
+            rubric_points=rubric_points,
+            reference_text=reference_text,
+        )
+        detail["is_correct"] = is_correct
+        return detail
+
+    answer_blob = "\n".join(
+        part
+        for part in [
+            text_answer,
+            code,
+            json.dumps(architecture_data) if architecture_data else "",
+            json.dumps(research_data) if research_data else "",
+        ]
+        if part
+    )
+    is_correct, score, detail = grade_open_ended_keywords(
+        answer_text=answer_blob,
+        rubric_points=rubric_points,
+        reference_text=reference_text,
+    )
+    detail["is_correct"] = is_correct
+    return detail
 
 
 @transaction.atomic
