@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -113,9 +114,18 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOWED_ORIGINS = _origin_list("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 CORS_ALLOW_CREDENTIALS = True
+# Cookie + CSRF preflight: browsers send Access-Control-Request-Headers: x-csrftoken
+# which is not in django-cors-headers defaults.
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-csrftoken",
+    "x-requested-with",
+]
 # Optional: comma-separated regexes, e.g. ^https://.*\.vercel\.app$
 CORS_ALLOWED_ORIGIN_REGEXES = _split_env("CORS_ALLOWED_ORIGIN_REGEXES", "")
 CSRF_TRUSTED_ORIGINS = _origin_list("CSRF_TRUSTED_ORIGINS", "http://localhost:3000")
+
+# Behind Render/Vercel TLS terminators, treat X-Forwarded-Proto as HTTPS.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "False").lower() in {"1", "true", "yes"}
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "Lax")
