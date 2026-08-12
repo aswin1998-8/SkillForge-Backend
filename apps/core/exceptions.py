@@ -9,10 +9,23 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
+from apps.diagnostics.code_executor import CodeSecurityError
+
 logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
+    if isinstance(exc, CodeSecurityError):
+        return Response(
+            {
+                "error": {
+                    "code": "CODE_SECURITY_ERROR",
+                    "message": str(exc) or "Code rejected by security checks.",
+                }
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     response = exception_handler(exc, context)
     if response is None:
         logger.exception("Unhandled API exception")

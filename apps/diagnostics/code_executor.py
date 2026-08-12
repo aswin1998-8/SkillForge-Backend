@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ast
 import json
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -77,9 +78,14 @@ def _validate_python_source(source: str) -> None:
 
 
 def _validate_javascript_source(source: str) -> None:
-    lowered = source.lower()
+    """Reject dangerous JS identifiers without flagging normal keywords.
+
+    Uses case-sensitive whole-identifier matching so ``function solve()`` is
+    allowed while ``new Function(...)`` / ``eval(...)`` stay blocked.
+    """
     for blocked in JS_BLOCKED_IDENTIFIERS:
-        if blocked.lower() in lowered:
+        pattern = rf"(?<![A-Za-z0-9_$]){re.escape(blocked)}(?![A-Za-z0-9_$])"
+        if re.search(pattern, source):
             raise CodeSecurityError(f"Blocked identifier: {blocked}")
 
 
