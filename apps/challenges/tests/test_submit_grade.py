@@ -152,6 +152,58 @@ def test_submit_theory_challenge_grades_substantive_answer() -> None:
 
 
 @pytest.mark.django_db
+def test_failed_submit_can_be_retried() -> None:
+    user = User.objects.create_user(email="retry@example.com", password="x")
+    challenge = Challenge.objects.create(
+        title="Defend Client Split",
+        slug="defend-client-split-retry",
+        modality=Challenge.Modality.DEFEND,
+        difficulty=2,
+    )
+    ChallengeModelAnswer.objects.create(
+        challenge=challenge,
+        reference_text=(
+            "Keep the page as a Server Component and push use client to the smallest "
+            "interactive leaves so the JS bundle stays small."
+        ),
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Argues for leaf-level client boundaries",
+        strength_fragment="Sound RSC boundary thinking",
+        order=1,
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Mentions JS bundle or server-capability cost",
+        strength_fragment="Performance-aware composition",
+        order=2,
+    )
+
+    first = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={"text_answer": "idk"},
+    )
+    assert first.status == ChallengeAttempt.Status.SUBMITTED
+    assert (first.submission.metadata.get("grading") or {}).get("is_correct") is False
+
+    second = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={
+            "text_answer": (
+                "Keep the page as a Server Component and put use client only on the "
+                "interactive leaf widget so we do not inflate the client JS bundle."
+            ),
+        },
+    )
+    assert second.id == first.id
+    assert second.status == ChallengeAttempt.Status.COMPLETED
+    assert (second.submission.metadata.get("grading") or {}).get("is_correct") is True
+
+
+@pytest.mark.django_db
 def test_submit_challenge_api_returns_completed() -> None:
     user = User.objects.create_user(email="chalapi@example.com", password="x")
     api = APIClient()

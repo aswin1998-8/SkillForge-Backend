@@ -307,36 +307,50 @@ def submit_challenge(
             daily.status = DailyChallenge.Status.AVAILABLE
             daily.save(update_fields=["challenge", "status", "updated_at"])
 
-    if daily.status in {DailyChallenge.Status.SUBMITTED, DailyChallenge.Status.COMPLETED}:
-        raise ValidationError("This challenge was already submitted.")
-
-    already = ChallengeAttempt.objects.filter(
-        user=user,
-        challenge=challenge,
-        status__in=[
-            ChallengeAttempt.Status.SUBMITTED,
-            ChallengeAttempt.Status.COMPLETED,
-        ],
-    ).exists()
-    if already:
-        raise ValidationError("This challenge was already submitted.")
-
-    attempt = (
+    finished = (
         ChallengeAttempt.objects.filter(
             user=user,
             challenge=challenge,
-            status=ChallengeAttempt.Status.IN_PROGRESS,
+            status__in=[
+                ChallengeAttempt.Status.SUBMITTED,
+                ChallengeAttempt.Status.COMPLETED,
+            ],
         )
+        .select_related("submission")
         .order_by("-started_at")
         .first()
     )
-    if attempt is None:
-        attempt = ChallengeAttempt.objects.create(
-            user=user,
-            challenge=challenge,
-            daily_challenge=daily,
-            status=ChallengeAttempt.Status.IN_PROGRESS,
+    retrying_failed = _attempt_failed_grading(finished)
+
+    if finished and not retrying_failed:
+        raise ValidationError("This challenge was already submitted.")
+
+    if daily.status in {DailyChallenge.Status.SUBMITTED, DailyChallenge.Status.COMPLETED}:
+        if retrying_failed and daily.challenge_id == challenge.id:
+            daily.status = DailyChallenge.Status.AVAILABLE
+            daily.save(update_fields=["status", "updated_at"])
+        else:
+            raise ValidationError("This challenge was already submitted.")
+
+    if retrying_failed and finished is not None:
+        attempt = finished
+    else:
+        attempt = (
+            ChallengeAttempt.objects.filter(
+                user=user,
+                challenge=challenge,
+                status=ChallengeAttempt.Status.IN_PROGRESS,
+            )
+            .order_by("-started_at")
+            .first()
         )
+        if attempt is None:
+            attempt = ChallengeAttempt.objects.create(
+                user=user,
+                challenge=challenge,
+                daily_challenge=daily,
+                status=ChallengeAttempt.Status.IN_PROGRESS,
+            )
 
     text_answer = payload.get("text_answer") or ""
     code = payload.get("code") or ""
@@ -352,6 +366,7 @@ def submit_challenge(
         research_data=research_data,
     )
     metadata["grading"] = grading
+    passed = _grading_passed(grading)
 
     Submission.objects.update_or_create(
         attempt=attempt,
@@ -364,40 +379,64 @@ def submit_challenge(
         },
     )
 
-    # Auto-complete on submit — no confidence / debrief gate.
-    attempt.status = ChallengeAttempt.Status.COMPLETED
-    attempt.completed_at = timezone.now()
-    attempt.save(update_fields=["status", "completed_at"])
-
-    daily.status = DailyChallenge.Status.COMPLETED
-    daily.save(update_fields=["status", "updated_at"])
-
-    DiagnosticRoadmapItem.objects.filter(
-        user=user,
-        challenge=challenge,
-    ).update(status="closed")
-
     score = float(grading.get("score") or 0)
     summary = (
         f"Graded {challenge.modality}: score {score:.0%}"
         if grading.get("score") is not None
         else f"Completed {challenge.modality} challenge"
     )
-    _update_gaps_for_challenge(
-        user=user,
-        challenge=challenge,
-        status=UserSkillGap.Status.CLOSED,
-        evidence_source_type="CHALLENGE_SUBMIT",
-        evidence_source_id=str(attempt.id),
-        evidence_summary=summary[:200],
-    )
 
-    next_item = get_active_roadmap_item(user=user)
-    if next_item is not None and next_item.status != "in_progress":
-        next_item.status = "in_progress"
-        next_item.save(update_fields=["status"])
+    if passed:
+        # Passed — lock the attempt and advance the roadmap.
+        attempt.status = ChallengeAttempt.Status.COMPLETED
+        attempt.completed_at = timezone.now()
+        attempt.save(update_fields=["status", "completed_at"])
 
-    _maybe_increment_diagnostic_cycle(user=user)
+        daily.status = DailyChallenge.Status.COMPLETED
+        daily.save(update_fields=["status", "updated_at"])
+
+        DiagnosticRoadmapItem.objects.filter(
+            user=user,
+            challenge=challenge,
+        ).update(status="closed")
+
+        _update_gaps_for_challenge(
+            user=user,
+            challenge=challenge,
+            status=UserSkillGap.Status.CLOSED,
+            evidence_source_type="CHALLENGE_SUBMIT",
+            evidence_source_id=str(attempt.id),
+            evidence_summary=summary[:200],
+        )
+
+        next_item = get_active_roadmap_item(user=user)
+        if next_item is not None and next_item.status != "in_progress":
+            next_item.status = "in_progress"
+            next_item.save(update_fields=["status"])
+
+        _maybe_increment_diagnostic_cycle(user=user)
+    else:
+        # Failed grade — keep the step open so the user can retry.
+        attempt.status = ChallengeAttempt.Status.SUBMITTED
+        attempt.completed_at = timezone.now()
+        attempt.save(update_fields=["status", "completed_at"])
+
+        daily.status = DailyChallenge.Status.AVAILABLE
+        daily.save(update_fields=["status", "updated_at"])
+
+        DiagnosticRoadmapItem.objects.filter(
+            user=user,
+            challenge=challenge,
+        ).update(status="in_progress")
+
+        _update_gaps_for_challenge(
+            user=user,
+            challenge=challenge,
+            status=UserSkillGap.Status.IN_PROGRESS,
+            evidence_source_type="CHALLENGE_SUBMIT",
+            evidence_source_id=str(attempt.id),
+            evidence_summary=summary[:200],
+        )
 
     from apps.sessions.services import record_session
 
@@ -414,6 +453,30 @@ def submit_challenge(
         .prefetch_related("challenge__rubric_items")
         .get(pk=attempt.pk)
     )
+
+
+def _grading_passed(grading: dict | None) -> bool:
+    if not isinstance(grading, dict):
+        return False
+    if "is_correct" in grading:
+        return bool(grading.get("is_correct"))
+    score = grading.get("score")
+    if score is None:
+        return False
+    try:
+        return float(score) >= 0.5
+    except (TypeError, ValueError):
+        return False
+
+
+def _attempt_failed_grading(attempt: ChallengeAttempt | None) -> bool:
+    if attempt is None:
+        return False
+    submission = getattr(attempt, "submission", None)
+    if submission is None:
+        return True
+    grading = (getattr(submission, "metadata", None) or {}).get("grading") or {}
+    return not _grading_passed(grading)
 
 
 def _flatten_research_data(research_data: dict | None) -> str:
