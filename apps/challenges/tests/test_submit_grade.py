@@ -58,6 +58,100 @@ def test_submit_challenge_keyword_grades_and_completes() -> None:
 
 
 @pytest.mark.django_db
+def test_submit_research_challenge_grades_research_data() -> None:
+    user = User.objects.create_user(email="research@example.com", password="x")
+    challenge = Challenge.objects.create(
+        title="Research SSR Caching Trade-offs",
+        slug="research-ssr-caching-grade",
+        modality=Challenge.Modality.RESEARCH,
+        difficulty=2,
+        description="Choose cache strategy",
+        scenario="Personalized Next.js pages",
+    )
+    ChallengeModelAnswer.objects.create(
+        challenge=challenge,
+        reference_text="Compare full-route cache vs dynamic rendering.",
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Compares at least two caching approaches with trade-offs",
+        order=1,
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Includes a credible source or docs reference",
+        order=2,
+    )
+
+    attempt = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={
+            "text_answer": "",
+            "code": "",
+            "research_data": {
+                "findings": (
+                    "Strategy 1 — Dynamic rendering with no shared cache. "
+                    "Strategy 2 — Cache shared public data only. "
+                    "Main trade-off is TTFB vs isolation."
+                ),
+                "synthesis": "Keep personalization dynamic; cache only shared data.",
+                "source": "Next.js — Static and Dynamic Rendering",
+            },
+        },
+    )
+    grading = attempt.submission.metadata.get("grading") or {}
+    assert grading.get("method") == "keyword_rubric"
+    assert grading.get("score") == pytest.approx(1.0)
+    assert grading.get("is_correct") is True
+    assert all(p["matched"] for p in grading.get("points") or [])
+
+
+@pytest.mark.django_db
+def test_submit_theory_challenge_grades_substantive_answer() -> None:
+    user = User.objects.create_user(email="theory@example.com", password="x")
+    challenge = Challenge.objects.create(
+        title="Explain React Reconciliation",
+        slug="explain-react-reconciliation-grade",
+        modality=Challenge.Modality.THEORY,
+        difficulty=1,
+    )
+    ChallengeModelAnswer.objects.create(
+        challenge=challenge,
+        reference_text=(
+            "React reconciles trees by comparing element types and keys. Stable keys "
+            "let React match previous instances so state is preserved."
+        ),
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Explains tree diff / reconciliation at a high level",
+        strength_fragment="Clear reconciliation mental model",
+        order=1,
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Explains why unstable keys cause remounts/bugs",
+        strength_fragment="Understands key stability impact",
+        order=2,
+    )
+
+    attempt = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={
+            "text_answer": (
+                "React reconciles by comparing element types and keys between renders. "
+                "Unstable keys remount components and drop local state when reordering."
+            ),
+        },
+    )
+    grading = attempt.submission.metadata.get("grading") or {}
+    assert grading.get("is_correct") is True
+    assert float(grading.get("score") or 0) >= 0.5
+
+
+@pytest.mark.django_db
 def test_submit_challenge_api_returns_completed() -> None:
     user = User.objects.create_user(email="chalapi@example.com", password="x")
     api = APIClient()

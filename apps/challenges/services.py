@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date
 
 from django.db import transaction
@@ -417,6 +416,67 @@ def submit_challenge(
     )
 
 
+def _flatten_research_data(research_data: dict | None) -> str:
+    """Turn research workspace fields into plain text for keyword grading."""
+    if not isinstance(research_data, dict) or not research_data:
+        return ""
+    parts: list[str] = []
+    for key in ("question", "findings", "synthesis", "source", "notes", "summary"):
+        value = research_data.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            parts.append(text)
+    # Any other string fields the workspace may send.
+    for key, value in research_data.items():
+        if key in {"question", "findings", "synthesis", "source", "notes", "summary"}:
+            continue
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+    return "\n".join(parts)
+
+
+def _flatten_architecture_data(architecture_data: dict | None) -> str:
+    """Extract labels/text from React Flow (or similar) architecture payloads."""
+    if not isinstance(architecture_data, dict) or not architecture_data:
+        return ""
+    parts: list[str] = []
+    for key in ("summary", "notes", "description", "rationale"):
+        value = architecture_data.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value.strip())
+
+    for node in architecture_data.get("nodes") or []:
+        if not isinstance(node, dict):
+            continue
+        for key in ("id", "type", "label", "name"):
+            value = node.get(key)
+            if isinstance(value, str) and value.strip():
+                parts.append(value.strip())
+        data = node.get("data")
+        if isinstance(data, dict):
+            for key in ("label", "name", "title", "description", "text"):
+                value = data.get(key)
+                if isinstance(value, str) and value.strip():
+                    parts.append(value.strip())
+
+    for edge in architecture_data.get("edges") or []:
+        if not isinstance(edge, dict):
+            continue
+        for key in ("label", "source", "target", "id"):
+            value = edge.get(key)
+            if isinstance(value, str) and value.strip():
+                parts.append(value.strip())
+        data = edge.get("data")
+        if isinstance(data, dict):
+            label = data.get("label")
+            if isinstance(label, str) and label.strip():
+                parts.append(label.strip())
+
+    return "\n".join(parts)
+
+
 def _grade_challenge_submission(
     *,
     challenge: Challenge,
@@ -434,7 +494,11 @@ def _grade_challenge_submission(
     config = challenge.workspace_config or {}
     model = getattr(challenge, "model_answer", None)
     reference_text = getattr(model, "reference_text", "") if model else ""
-    rubric_points = [i.text for i in challenge.rubric_items.all() if i.text]
+    rubric_items = list(challenge.rubric_items.all())
+    rubric_points = [i.text for i in rubric_items if i.text]
+    rubric_hints = [
+        (i.strength_fragment or i.gap_fragment or "") for i in rubric_items if i.text
+    ]
 
     if modality in {Challenge.Modality.CODING, Challenge.Modality.EXPLAIN_CODE}:
         raw_cases = config.get("test_cases")
@@ -470,6 +534,7 @@ def _grade_challenge_submission(
         is_correct, score, detail = grade_open_ended_keywords(
             answer_text=code or text_answer,
             rubric_points=rubric_points,
+            rubric_hints=rubric_hints,
             reference_text=reference_text,
         )
         detail["is_correct"] = is_correct
@@ -480,14 +545,15 @@ def _grade_challenge_submission(
         for part in [
             text_answer,
             code,
-            json.dumps(architecture_data) if architecture_data else "",
-            json.dumps(research_data) if research_data else "",
+            _flatten_architecture_data(architecture_data),
+            _flatten_research_data(research_data),
         ]
-        if part
+        if part and str(part).strip()
     )
     is_correct, score, detail = grade_open_ended_keywords(
         answer_text=answer_blob,
         rubric_points=rubric_points,
+        rubric_hints=rubric_hints,
         reference_text=reference_text,
     )
     detail["is_correct"] = is_correct

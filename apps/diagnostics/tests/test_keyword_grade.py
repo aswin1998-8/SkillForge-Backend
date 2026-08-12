@@ -31,6 +31,74 @@ def test_keyword_rubric_partial_credit() -> None:
     assert is_correct is True
 
 
+def test_instructional_rubric_matches_research_answer() -> None:
+    """Criteria-style rubric points should grade substantive research answers."""
+    answer = """
+    Strategy 1 — Dynamic rendering / no shared caching: Render personalized pages
+    per request. Trade-off: safer isolation, higher TTFB.
+    Strategy 2 — Cache only shared/public data; keep personalization dynamic.
+    Next.js — Static and Dynamic Rendering
+    """
+    is_correct, score, detail = grade_open_ended_keywords(
+        answer_text=answer,
+        rubric_points=[
+            "Compares at least two caching approaches with trade-offs",
+            "Includes a credible source or docs reference",
+        ],
+        reference_text=(
+            "Compare full-route cache vs dynamic rendering with partial caching."
+        ),
+    )
+    assert detail["method"] in {"keyword_rubric", "keyword_reference_overlap"}
+    assert score >= 0.5
+    assert is_correct is True
+
+
+def test_theory_rubric_blends_with_model_answer() -> None:
+    answer = (
+        "React reconciles trees by comparing element types and keys. "
+        "Unstable keys remount components and lose state when the list reorders."
+    )
+    is_correct, score, detail = grade_open_ended_keywords(
+        answer_text=answer,
+        rubric_points=[
+            "Explains tree diff / reconciliation at a high level",
+            "Explains why unstable keys cause remounts/bugs",
+        ],
+        rubric_hints=[
+            "Clear reconciliation mental model",
+            "Understands key stability impact",
+        ],
+        reference_text=(
+            "React reconciles trees by comparing element types and keys. Stable keys "
+            "let React match previous instances so state is preserved."
+        ),
+    )
+    assert is_correct is True
+    assert score >= 0.5
+    assert detail.get("reference_overlap", {}).get("score", 0) > 0
+
+
+def test_diagnose_answer_matches_nplus1_rubric() -> None:
+    answer = (
+        "This is classic N+1 from nested serializers. "
+        "Confirm with django-debug-toolbar query count, then fix with select_related."
+    )
+    is_correct, score, detail = grade_open_ended_keywords(
+        answer_text=answer,
+        rubric_points=[
+            "Identifies N+1 / missing prefetch as likely cause",
+            "Proposes a concrete verification (query count / EXPLAIN)",
+        ],
+        reference_text=(
+            "Classic N+1: list fetches posts then one query per related user. "
+            "Fix with select_related/prefetch_related and verify with query counting."
+        ),
+    )
+    assert is_correct is True
+    assert score >= 0.5
+
+
 def test_keyword_reference_fallback() -> None:
     is_correct, score, detail = grade_open_ended_keywords(
         answer_text="cache redis latency",
@@ -83,5 +151,8 @@ def test_grade_session_open_ended_without_confidence() -> None:
     sq.refresh_from_db()
     assert isinstance(answer, SessionAnswer)
     assert sq.status == SessionQuestion.Status.ANSWERED
-    assert answer.grading_detail.get("method") == "keyword_rubric"
+    assert answer.grading_detail.get("method") in {
+        "keyword_rubric",
+        "keyword_reference_overlap",
+    }
     assert answer.is_correct is not None
