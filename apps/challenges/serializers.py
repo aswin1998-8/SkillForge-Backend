@@ -43,6 +43,34 @@ class ChallengeSerializer(serializers.ModelSerializer):
             "skills",
         )
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # LeetCode-style: visible examples include input + expected; hide secret cases.
+        config = dict(data.get("workspace_config") or {})
+        raw_cases = config.get("test_cases")
+        if isinstance(raw_cases, list):
+            public_cases = []
+            hidden_count = 0
+            for i, case in enumerate(raw_cases):
+                if not isinstance(case, dict):
+                    continue
+                if bool(case.get("is_hidden", False)):
+                    hidden_count += 1
+                    continue
+                public_cases.append(
+                    {
+                        "id": case.get("id", i),
+                        "order": int(case.get("order", i)),
+                        "is_hidden": False,
+                        "input": str(case.get("input", "")),
+                        "expected_output": str(case.get("expected_output", "")),
+                    }
+                )
+            config["test_cases"] = public_cases
+            config["hidden_test_count"] = hidden_count
+            data["workspace_config"] = config
+        return data
+
 
 class DailyChallengeSerializer(serializers.ModelSerializer):
     challenge = ChallengeSerializer(read_only=True)
@@ -64,6 +92,45 @@ class SubmissionSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         )
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        metadata = dict(data.get("metadata") or {})
+        grading = dict(metadata.get("grading") or {})
+        results = grading.get("test_results")
+        if isinstance(results, list):
+            public = []
+            hidden_total = 0
+            hidden_passed = 0
+            for r in results:
+                if not isinstance(r, dict):
+                    continue
+                if r.get("hidden"):
+                    hidden_total += 1
+                    if r.get("passed") and not r.get("skipped"):
+                        hidden_passed += 1
+                    continue
+                public.append(
+                    {
+                        "case_id": r.get("case_id"),
+                        "passed": bool(r.get("passed")),
+                        "hidden": False,
+                        "stdout": r.get("stdout") or "",
+                        "stderr": r.get("stderr") or "",
+                        "actual_output": r.get("actual_output") or "",
+                        "expected_output": r.get("expected_output") or "",
+                        "runtime_ms": r.get("runtime_ms") or 0,
+                    }
+                )
+            grading["test_results"] = public
+            if hidden_total:
+                grading["hidden_summary"] = {
+                    "total": hidden_total,
+                    "passed": hidden_passed,
+                }
+            metadata["grading"] = grading
+            data["metadata"] = metadata
+        return data
 
 
 class ConfidenceRatingSerializer(serializers.ModelSerializer):
@@ -103,6 +170,10 @@ class ChallengeSubmitSerializer(serializers.Serializer):
     architecture_data = serializers.JSONField(required=False, default=dict)
     research_data = serializers.JSONField(required=False, default=dict)
     metadata = serializers.JSONField(required=False, default=dict)
+
+
+class ChallengeRunTestsSerializer(serializers.Serializer):
+    code = serializers.CharField(required=True, allow_blank=False)
 
 
 class ConfidenceCreateSerializer(serializers.Serializer):

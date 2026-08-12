@@ -89,13 +89,95 @@ def _validate_javascript_source(source: str) -> None:
             raise CodeSecurityError(f"Blocked identifier: {blocked}")
 
 
+def _strip_typescript(source: str) -> str:
+    """Best-effort strip of common TypeScript syntax so Node can run the code.
+
+    Supports type aliases, interfaces, parameter/return/variable annotations, and
+    ``as`` assertions used in challenge starters — not a full TS compiler.
+    """
+    code = source
+    # Remove single-line import type ...
+    code = re.sub(r"(?m)^\s*import\s+type\s+.+?;\s*$", "", code)
+    # Remove export type / type aliases
+    code = re.sub(r"(?m)^\s*(?:export\s+)?type\s+[^=]+=\s*.+?;\s*$", "", code)
+    # Remove interface blocks (non-nested braces)
+    code = re.sub(
+        r"(?ms)^\s*(?:export\s+)?interface\s+\w+[^{]*\{.*?\}\s*$",
+        "",
+        code,
+    )
+
+    # Remove `as { ... }` object assertions (brace-balanced).
+    while True:
+        match = re.search(r"\s+as\s*\{", code)
+        if not match:
+            break
+        start = match.start()
+        i = match.end() - 1
+        depth = 0
+        end = None
+        for j in range(i, len(code)):
+            if code[j] == "{":
+                depth += 1
+            elif code[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    end = j + 1
+                    break
+        if end is None:
+            break
+        code = code[:start] + code[end:]
+
+    # Remove `as const` / `as Type` / `as Type<...>` / `as Type[]`
+    code = re.sub(r"\s+as\s+const\b", "", code)
+    code = re.sub(
+        r"\s+as\s+[A-Za-z_][\w$]*(?:\s*\.\s*[A-Za-z_][\w$]*)*(?:\s*<[^;{}<>]*>)?(?:\s*\[\s*\])*",
+        "",
+        code,
+    )
+
+    # Remove return type annotations: ): Type {  or ): Type =>
+    code = re.sub(
+        r"\)\s*:\s*[A-Za-z_][\w.<>,\s|&\[\]]*?(?=\s*[{=>])",
+        ")",
+        code,
+    )
+    # Remove variable annotations: const parts: string[] =
+    code = re.sub(
+        r"\b((?:const|let|var)\s+[A-Za-z_$][\w$]*)\s*:\s*[^=;\n]+?(?==)",
+        r"\1",
+        code,
+    )
+    # Remove param annotations: (input: string) / ({a}: Props)
+    code = re.sub(
+        r"([,(]\s*[A-Za-z_$][\w$]*)\s*:\s*[A-Za-z_][\w.<>,\s|&\[\]]*(?=\s*[,)=])",
+        r"\1",
+        code,
+    )
+    code = re.sub(r"\breadonly\s+", "", code)
+    return code
+
+
 def validate_source(*, code: str, language: str) -> None:
     if language == "python":
         _validate_python_source(code)
-    elif language == "javascript":
-        _validate_javascript_source(code)
+    elif language in {"javascript", "typescript"}:
+        check = _strip_typescript(code) if language == "typescript" else code
+        _validate_javascript_source(check)
     else:
         raise CodeSecurityError(f"Unsupported language: {language}")
+
+
+def prepare_executable(*, code: str, language: str) -> tuple[str, str]:
+    """Return (source, runtime_language) ready for the sandbox."""
+    raw = str(language or "python").strip().lower()
+    if raw in {"python", "py"}:
+        return code, "python"
+    if raw in {"typescript", "ts"}:
+        return _strip_typescript(code), "javascript"
+    if raw in {"javascript", "js"}:
+        return code, "javascript"
+    raise CodeSecurityError(f"Unsupported language: {language}")
 
 
 def _truncate_output(value: str, limit: int = 8000) -> str:
@@ -182,12 +264,13 @@ def run_single_test(
         }
 
     timeout = timeout_seconds or getattr(settings, "CODE_EXECUTION_TIMEOUT_SECONDS", 5.0)
-    validate_source(code=code, language=language)
+    source, runtime = prepare_executable(code=code, language=language)
+    validate_source(code=source, language=runtime)
 
     with tempfile.TemporaryDirectory(prefix="sf_exec_") as tmp:
         cwd = Path(tmp)
-        if language == "python":
-            harness = _python_harness(code, stdin_data)
+        if runtime == "python":
+            harness = _python_harness(source, stdin_data)
             script_path = cwd / "solution.py"
             script_path.write_text(harness, encoding="utf-8")
             stdout, stderr, returncode, runtime_ms = _run_subprocess(
@@ -195,8 +278,8 @@ def run_single_test(
                 cwd=cwd,
                 timeout_seconds=timeout,
             )
-        elif language == "javascript":
-            harness = _javascript_harness(code, stdin_data)
+        elif runtime == "javascript":
+            harness = _javascript_harness(source, stdin_data)
             script_path = cwd / "solution.js"
             script_path.write_text(harness, encoding="utf-8")
             stdout, stderr, returncode, runtime_ms = _run_subprocess(

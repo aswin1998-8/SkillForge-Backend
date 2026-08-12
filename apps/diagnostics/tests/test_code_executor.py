@@ -30,7 +30,7 @@ def test_validate_javascript_blocks_eval() -> None:
 
 
 def test_validate_javascript_blocks_require() -> None:
-    with pytest.raises(CodeSecurityError, match="require"):
+    with pytest.raises(CodeSecurityError, match="require|fs"):
         validate_source(code='const fs = require("fs")', language="javascript")
 
 

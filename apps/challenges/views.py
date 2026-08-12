@@ -10,6 +10,7 @@ from apps.challenges.models import AnalyticsEvent
 from apps.challenges.serializers import (
     AnalyticsEventSerializer,
     ChallengeAttemptSerializer,
+    ChallengeRunTestsSerializer,
     ChallengeSerializer,
     ChallengeSubmitSerializer,
     ConfidenceCreateSerializer,
@@ -25,6 +26,7 @@ from apps.challenges.services import (
     get_challenge_or_404,
     get_debrief_payload,
     get_or_assign_today_challenge,
+    run_challenge_tests_preview,
     save_confidence,
     submit_challenge,
     submit_debrief_checklist,
@@ -81,6 +83,20 @@ class ChallengeSubmitView(APIView):
             message="Challenge submitted",
             status=status.HTTP_201_CREATED,
         )
+
+
+class ChallengeRunTestsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request: Request, challenge_id: int) -> Response:
+        serializer = ChallengeRunTestsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = run_challenge_tests_preview(
+            user=request.user,
+            challenge_id=challenge_id,
+            code=serializer.validated_data["code"],
+        )
+        return success_response(payload, message="Tests executed")
 
 
 class AttemptConfidenceView(APIView):

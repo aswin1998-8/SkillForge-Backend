@@ -50,9 +50,68 @@ SAMPLE_CHALLENGES = [
         "skill": "django",
         "competency_areas": ["views_api", "pagination", "queryset"],
         "directions": ["backend_mastery"],
-        "scenario": "Write a helper to paginate queryset-like results.",
-        "requirements": ["Accept page + page_size", "Return slice metadata"],
-        "workspace_config": {"language": "python"},
+        "scenario": (
+            "Implement solve(input) where input is a JSON string with "
+            "items (list), page (1-based), and page_size. Return a JSON string with "
+            "items (page slice), page, page_size, total, and pages."
+        ),
+        "requirements": [
+            "Accept page + page_size",
+            "Return slice metadata",
+            "Implement solve(input) -> JSON string",
+        ],
+        "workspace_config": {
+            "language": "python",
+            "framework": "django",
+            "starter_code": (
+                "import json\n"
+                "\n"
+                "def solve(input):\n"
+                "    data = json.loads(input)\n"
+                "    items = data.get(\"items\") or []\n"
+                "    page = int(data.get(\"page\") or 1)\n"
+                "    page_size = int(data.get(\"page_size\") or 10)\n"
+                "    # TODO: paginate and return JSON string with\n"
+                "    # items, page, page_size, total, pages\n"
+                "    return json.dumps({\n"
+                "        \"items\": items,\n"
+                "        \"page\": page,\n"
+                "        \"page_size\": page_size,\n"
+                "        \"total\": len(items),\n"
+                "        \"pages\": 1,\n"
+                "    }, separators=(\",\", \":\"))\n"
+            ),
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": '{"items":[1,2,3,4,5],"page":1,"page_size":2}',
+                    "expected_output": '{"items":[1,2],"page":1,"page_size":2,"total":5,"pages":3}',
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": '{"items":[1,2,3,4,5],"page":2,"page_size":2}',
+                    "expected_output": '{"items":[3,4],"page":2,"page_size":2,"total":5,"pages":3}',
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '{"items":[],"page":1,"page_size":10}',
+                    "expected_output": '{"items":[],"page":1,"page_size":10,"total":0,"pages":0}',
+                },
+                {
+                    "id": 3,
+                    "order": 3,
+                    "is_hidden": True,
+                    "input": '{"items":[1,2,3],"page":9,"page_size":2}',
+                    "expected_output": '{"items":[],"page":9,"page_size":2,"total":3,"pages":2}',
+                },
+            ],
+        },
         "model_answer": (
             "Clamp page/page_size, compute offset, return items plus total/pages metadata. "
             "Guard empty lists and page overflow."
@@ -422,32 +481,331 @@ SAMPLE_CHALLENGES = [
         ],
     },
     {
-        "title": "Implement a Tiny useToggle Hook",
-        "slug": "implement-tiny-usetoggle-hook",
+        "title": "Implement Chunk Array",
+        "slug": "implement-chunk-array",
         "modality": Challenge.Modality.CODING,
         "difficulty": 1,
         "skill": "react",
         "competency_areas": ["hooks", "state_management", "state"],
         "directions": ["frontend_mastery", "be_to_fe"],
-        "scenario": "Write a reusable toggle hook for boolean UI state.",
-        "requirements": ["Return value + toggle", "Support optional initial value"],
-        "workspace_config": {"language": "typescript"},
+        "scenario": (
+            "Implement solve(input) where input is JSON {\"array\": [...], \"size\": n}. "
+            "Return a JSON array of chunks of length size (last chunk may be shorter)."
+        ),
+        "requirements": [
+            "Chunk an array by size",
+            "Implement solve(input) -> JSON string",
+        ],
+        "workspace_config": {
+            "language": "javascript",
+            "framework": "react",
+            "starter_code": (
+                "function solve(input) {\n"
+                "  const data = JSON.parse(input);\n"
+                "  const arr = data.array || [];\n"
+                "  const size = Number(data.size);\n"
+                "  // TODO: return JSON string of chunked arrays\n"
+                "  return JSON.stringify([arr]);\n"
+                "}\n"
+            ),
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": '{"array":[1,2,3,4,5],"size":2}',
+                    "expected_output": "[[1,2],[3,4],[5]]",
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": '{"array":[1,2,3],"size":3}',
+                    "expected_output": "[[1,2,3]]",
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '{"array":[],"size":2}',
+                    "expected_output": "[]",
+                },
+                {
+                    "id": 3,
+                    "order": 3,
+                    "is_hidden": True,
+                    "input": '{"array":[1,2,3,4],"size":1}',
+                    "expected_output": "[[1],[2],[3],[4]]",
+                },
+            ],
+        },
         "model_answer": (
-            "useState(initial ?? false) plus a toggle callback that flips the boolean. "
-            "Keep the API stable and avoid resetting on every parent render."
+            "Iterate with a step of size and slice array[i:i+size]. "
+            "Return JSON.stringify of the chunks list; empty input yields []."
         ),
         "rubric": [
             {
-                "text": "Exposes value and a toggle function",
-                "strength": "Clean hook API design",
-                "gap": "Hook API shape needs tightening",
-                "follow_up": "What should useToggle return?",
+                "text": "Chunks array into groups of size",
+                "strength": "Correct chunking logic",
+                "gap": "Chunk boundaries need work",
+                "follow_up": "What happens to the last incomplete chunk?",
             },
             {
-                "text": "Honors an optional initial value",
-                "strength": "Handles initialization correctly",
-                "gap": "Initial-state handling incomplete",
-                "follow_up": "What is the default when initial is omitted?",
+                "text": "Handles empty arrays",
+                "strength": "Edge-case aware",
+                "gap": "Empty-input handling incomplete",
+                "follow_up": "What should chunk([], 2) return?",
+            },
+        ],
+    },
+    {
+        "title": "Build Django Query Filter Dict",
+        "slug": "implement-django-query-filter-dict",
+        "modality": Challenge.Modality.CODING,
+        "difficulty": 2,
+        "skill": "django",
+        "competency_areas": ["views_api", "queryset", "validation"],
+        "directions": ["backend_mastery"],
+        "scenario": (
+            "Implement solve(input) for a Django-style list endpoint. Input JSON has "
+            "allowed_fields (list) and query (object of request GET params). Return a "
+            "JSON object of ORM filters: only allowed keys, drop empty values, and map "
+            "search -> name__icontains when search is present."
+        ),
+        "requirements": [
+            "Whitelist query keys",
+            "Map search to name__icontains",
+            "Implement solve(input) -> JSON string",
+        ],
+        "workspace_config": {
+            "language": "python",
+            "framework": "django",
+            "starter_code": (
+                "import json\n"
+                "\n"
+                "def solve(input: str) -> str:\n"
+                "    data = json.loads(input)\n"
+                "    allowed = set(data.get(\"allowed_fields\") or [])\n"
+                "    query = data.get(\"query\") or {}\n"
+                "    # TODO: build filters dict and return JSON\n"
+                "    return json.dumps({}, separators=(\",\", \":\"))\n"
+            ),
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": (
+                        '{"allowed_fields":["status","owner_id","search"],'
+                        '"query":{"status":"open","owner_id":"3","page":"1"}}'
+                    ),
+                    "expected_output": '{"status":"open","owner_id":"3"}',
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": (
+                        '{"allowed_fields":["status","search"],'
+                        '"query":{"search":"hooks","status":""}}'
+                    ),
+                    "expected_output": '{"name__icontains":"hooks"}',
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '{"allowed_fields":["status"],"query":{"evil":"1"}}',
+                    "expected_output": "{}",
+                },
+                {
+                    "id": 3,
+                    "order": 3,
+                    "is_hidden": True,
+                    "input": (
+                        '{"allowed_fields":["search","status"],'
+                        '"query":{"search":"x","status":"done"}}'
+                    ),
+                    "expected_output": '{"name__icontains":"x","status":"done"}',
+                },
+            ],
+        },
+        "model_answer": (
+            "Iterate query items, skip blanks and non-allowed keys, translate search to "
+            "name__icontains, json.dumps with compact separators."
+        ),
+        "rubric": [
+            {
+                "text": "Whitelists allowed query fields",
+                "strength": "Safe filter construction",
+                "gap": "Query whitelist incomplete",
+                "follow_up": "Why reject unknown query keys?",
+            },
+            {
+                "text": "Maps search to icontains lookup",
+                "strength": "Correct ORM lookup mapping",
+                "gap": "Search mapping missing",
+                "follow_up": "Which lookup does search become?",
+            },
+        ],
+    },
+    {
+        "title": "React Class Name Merger",
+        "slug": "implement-react-classnames-merge",
+        "modality": Challenge.Modality.CODING,
+        "difficulty": 1,
+        "skill": "react",
+        "competency_areas": ["components", "rendering", "state"],
+        "directions": ["frontend_mastery"],
+        "scenario": (
+            "Implement solve(input) for a React utility: input JSON is an array of "
+            "tokens (strings, false, null). Return a single className string joining "
+            "truthy string tokens with spaces (skip falsy)."
+        ),
+        "requirements": [
+            "Join truthy class tokens",
+            "Implement solve(input) -> string",
+        ],
+        "workspace_config": {
+            "language": "typescript",
+            "framework": "react",
+            "starter_code": (
+                "type Token = string | false | null | undefined;\n"
+                "\n"
+                "function solve(input: string): string {\n"
+                "  const tokens = JSON.parse(input) as Token[];\n"
+                "  // TODO: return space-joined truthy strings (skip false/null/\"\")\n"
+                "  return \"\";\n"
+                "}\n"
+            ),
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": '["btn","btn-primary",false,null,"active"]',
+                    "expected_output": "btn btn-primary active",
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": '[null,false,""]',
+                    "expected_output": "",
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '["only"]',
+                    "expected_output": "only",
+                },
+                {
+                    "id": 3,
+                    "order": 3,
+                    "is_hidden": True,
+                    "input": '["a",false,"b","",null,"c"]',
+                    "expected_output": "a b c",
+                },
+            ],
+        },
+        "model_answer": (
+            "JSON.parse the array, filter values that are non-empty strings, join with spaces."
+        ),
+        "rubric": [
+            {
+                "text": "Joins truthy class name tokens",
+                "strength": "Clean className helper",
+                "gap": "Token filtering incomplete",
+                "follow_up": "How do you treat empty strings?",
+            },
+            {
+                "text": "Ignores falsy tokens",
+                "strength": "Conditional class handling",
+                "gap": "Falsy handling incomplete",
+                "follow_up": "Why skip false/null in class lists?",
+            },
+        ],
+    },
+    {
+        "title": "Next.js Search Params Serializer",
+        "slug": "implement-nextjs-search-params",
+        "modality": Challenge.Modality.CODING,
+        "difficulty": 2,
+        "skill": "nextjs",
+        "competency_areas": ["routing", "data_fetching", "ssr_ssg"],
+        "directions": ["frontend_mastery"],
+        "scenario": (
+            "Implement solve(input) for App Router helpers. Input JSON has params "
+            "(object of string | string[] | null). Return a query string without "
+            "leading ?, sorted by key, skipping null/empty, repeating keys for arrays."
+        ),
+        "requirements": [
+            "Serialize search params",
+            "Stable key order",
+            "Implement solve(input) -> query string",
+        ],
+        "workspace_config": {
+            "language": "typescript",
+            "framework": "nextjs",
+            "starter_code": (
+                "type ParamValue = string | string[] | null;\n"
+                "\n"
+                "function solve(input: string): string {\n"
+                "  const data = JSON.parse(input) as { params: Record<string, ParamValue> };\n"
+                "  const params = data.params || {};\n"
+                "  // TODO: return query string without leading ?\n"
+                "  // Skip null and empty strings; repeat keys for arrays; sort keys.\n"
+                "  return \"\";\n"
+                "}\n"
+            ),
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": '{"params":{"q":"hooks","page":"2"}}',
+                    "expected_output": "page=2&q=hooks",
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": '{"params":{"tag":["a","b"],"q":"x"}}',
+                    "expected_output": "q=x&tag=a&tag=b",
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '{"params":{"q":"","page":null}}',
+                    "expected_output": "",
+                },
+                {
+                    "id": 3,
+                    "order": 3,
+                    "is_hidden": True,
+                    "input": '{"params":{"z":"1","a":"2"}}',
+                    "expected_output": "a=2&z=1",
+                },
+            ],
+        },
+        "model_answer": (
+            "Sort keys, skip null/undefined/empty strings, append key=value for strings and "
+            "one entry per array item, join with &."
+        ),
+        "rubric": [
+            {
+                "text": "Serializes params with stable ordering",
+                "strength": "Deterministic query strings",
+                "gap": "Ordering/serialization incomplete",
+                "follow_up": "Why sort keys in cache-sensitive URLs?",
+            },
+            {
+                "text": "Supports repeated keys for arrays",
+                "strength": "Array param handling",
+                "gap": "Array params incomplete",
+                "follow_up": "How should tag=[a,b] appear?",
             },
         ],
     },
@@ -527,6 +885,8 @@ LEGACY_AI_CHALLENGE_SLUGS = frozenset(
         "explain-this-retrieval-function",
         "use-ai-to-draft-an-eval-rubric",
         "communicate-an-ai-risk-to-leadership",
+        # Replaced by implement-chunk-array (executable harness).
+        "implement-tiny-usetoggle-hook",
     }
 )
 

@@ -540,6 +540,92 @@ def _flatten_architecture_data(architecture_data: dict | None) -> str:
     return "\n".join(parts)
 
 
+def _normalize_execution_language(language: str | None) -> str:
+    raw = str(language or "python").strip().lower()
+    if raw in {"javascript", "js"}:
+        return "javascript"
+    if raw in {"typescript", "ts"}:
+        return "typescript"
+    if raw in {"python", "py"}:
+        return "python"
+    return raw
+
+
+def _parse_workspace_test_cases(config: dict) -> list:
+    from types import SimpleNamespace
+
+    raw_cases = config.get("test_cases")
+    if not isinstance(raw_cases, list):
+        return []
+    cases = []
+    for i, case in enumerate(raw_cases):
+        if not isinstance(case, dict):
+            continue
+        cases.append(
+            SimpleNamespace(
+                id=case.get("id", i),
+                input=str(case.get("input", "")),
+                expected_output=str(case.get("expected_output", "")),
+                is_hidden=bool(case.get("is_hidden", False)),
+                order=int(case.get("order", i)),
+            )
+        )
+    return cases
+
+
+def run_challenge_tests_preview(
+    *,
+    user: User,
+    challenge_id: int,
+    code: str,
+) -> dict:
+    """Run visible test cases only (LeetCode-style Run Code)."""
+    from apps.diagnostics.code_executor import run_test_cases
+
+    challenge = get_challenge_or_404(challenge_id)
+    locked, _unlocked_id = challenge_is_locked(user=user, challenge_id=challenge.id)
+    if locked:
+        raise ValidationError(
+            "Complete your current roadmap challenge before unlocking the next one."
+        )
+    if challenge.modality != Challenge.Modality.CODING:
+        raise ValidationError("Test execution is only available for coding challenges.")
+
+    config = challenge.workspace_config or {}
+    cases = _parse_workspace_test_cases(config)
+    if not cases:
+        raise ValidationError("No test cases configured for this challenge.")
+
+    visible = [c for c in cases if not c.is_hidden]
+    if not visible:
+        raise ValidationError("No visible test cases configured for this challenge.")
+
+    language = _normalize_execution_language(config.get("language"))
+    results = run_test_cases(code=code or "", language=language, test_cases=visible)
+    # Ensure visible payload never leaks hidden cases.
+    case_input_by_id = {c.id: c.input for c in visible}
+    public_results = []
+    for r in results:
+        case_id = r.get("case_id")
+        public_results.append(
+            {
+                "case_id": case_id,
+                "passed": bool(r.get("passed")),
+                "hidden": False,
+                "input": case_input_by_id.get(case_id, ""),
+                "stdout": r.get("stdout") or "",
+                "stderr": r.get("stderr") or "",
+                "actual_output": r.get("actual_output") or "",
+                "expected_output": r.get("expected_output") or "",
+                "runtime_ms": r.get("runtime_ms") or 0,
+            }
+        )
+    return {
+        "passed_visible": all(r["passed"] for r in public_results) if public_results else False,
+        "test_results": public_results,
+    }
+
+
 def _grade_challenge_submission(
     *,
     challenge: Challenge,
@@ -548,8 +634,6 @@ def _grade_challenge_submission(
     architecture_data: dict,
     research_data: dict,
 ) -> dict:
-    from types import SimpleNamespace
-
     from apps.core.keyword_grade import grade_open_ended_keywords
     from apps.diagnostics.code_executor import run_test_cases
 
@@ -563,37 +647,32 @@ def _grade_challenge_submission(
         (i.strength_fragment or i.gap_fragment or "") for i in rubric_items if i.text
     ]
 
-    if modality in {Challenge.Modality.CODING, Challenge.Modality.EXPLAIN_CODE}:
-        raw_cases = config.get("test_cases")
-        if isinstance(raw_cases, list) and raw_cases:
-            cases = []
-            for i, case in enumerate(raw_cases):
-                if not isinstance(case, dict):
-                    continue
-                cases.append(
-                    SimpleNamespace(
-                        input=str(case.get("input", "")),
-                        expected_output=str(case.get("expected_output", "")),
-                        is_hidden=bool(case.get("is_hidden", False)),
-                        order=int(case.get("order", i)),
-                    )
-                )
-            if cases:
-                language = str(config.get("language") or "python")
-                results = run_test_cases(
-                    code=code or text_answer,
-                    language=language,
-                    test_cases=cases,
-                )
-                passed = all(r.get("passed") for r in results) if results else False
-                score = 1.0 if passed else 0.0
-                return {
-                    "method": "test_execution",
-                    "score": score,
-                    "is_correct": passed,
-                    "test_results": results,
-                }
+    if modality == Challenge.Modality.CODING:
+        cases = _parse_workspace_test_cases(config)
+        if not cases:
+            return {
+                "method": "test_execution",
+                "score": 0.0,
+                "is_correct": False,
+                "error": "no_test_cases_configured",
+                "test_results": [],
+            }
+        language = _normalize_execution_language(config.get("language"))
+        results = run_test_cases(
+            code=code or text_answer,
+            language=language,
+            test_cases=cases,
+        )
+        passed = all(r.get("passed") for r in results) if results else False
+        score = 1.0 if passed else 0.0
+        return {
+            "method": "test_execution",
+            "score": score,
+            "is_correct": passed,
+            "test_results": results,
+        }
 
+    if modality == Challenge.Modality.EXPLAIN_CODE:
         is_correct, score, detail = grade_open_ended_keywords(
             answer_text=code or text_answer,
             rubric_points=rubric_points,
