@@ -187,12 +187,21 @@ def _pick_fallback_challenge(*, user: User) -> Challenge:
         .exclude(status="closed")
         .values_list("topic", flat=True)[:8]
     )
-    completed_challenge_ids = ChallengeAttempt.objects.filter(
-        user=user,
-        status__in=[ChallengeAttempt.Status.COMPLETED, ChallengeAttempt.Status.SUBMITTED],
-    ).values_list("challenge_id", flat=True)
+    # Only exclude challenges the user already passed. Failed SUBMITTED attempts
+    # remain eligible so users can retry.
+    passed_challenge_ids = [
+        attempt.challenge_id
+        for attempt in ChallengeAttempt.objects.filter(
+            user=user,
+            status__in=[
+                ChallengeAttempt.Status.COMPLETED,
+                ChallengeAttempt.Status.SUBMITTED,
+            ],
+        ).select_related("submission")
+        if not _attempt_failed_grading(attempt)
+    ]
 
-    qs = Challenge.objects.filter(is_active=True).exclude(id__in=completed_challenge_ids)
+    qs = Challenge.objects.filter(is_active=True).exclude(id__in=passed_challenge_ids)
     directions = _direction_for_user(user)
     if directions:
         direction_q = Q()
@@ -238,13 +247,21 @@ def _pick_fallback_challenge(*, user: User) -> Challenge:
 
 def resolve_current_challenge(*, user: User) -> Challenge:
     """Current unlocked challenge from roadmap, or a fallback catalog pick."""
-    item = get_active_roadmap_item(user=user)
-    if item is not None:
+    # Skip roadmap steps the user already passed (heals stuck "already submitted" loops).
+    for _ in range(25):
+        item = get_active_roadmap_item(user=user)
+        if item is None:
+            break
         if item.status == "not_started":
             item.status = "in_progress"
             item.save(update_fields=["status"])
-        if item.challenge_id:
-            return item.challenge
+        if not item.challenge_id:
+            break
+        if _user_passed_challenge(user=user, challenge_id=item.challenge_id):
+            item.status = "closed"
+            item.save(update_fields=["status"])
+            continue
+        return item.challenge
     return _pick_fallback_challenge(user=user)
 
 
@@ -322,8 +339,22 @@ def submit_challenge(
     )
     retrying_failed = _attempt_failed_grading(finished)
 
+    # Already passed — return the existing attempt (idempotent) instead of hard-failing.
+    # Also heal roadmap/daily if they were left open after a prior pass.
     if finished and not retrying_failed:
-        raise ValidationError("This challenge was already submitted.")
+        _heal_passed_challenge_state(
+            user=user,
+            challenge=challenge,
+            attempt=finished,
+            daily=daily,
+        )
+        return (
+            ChallengeAttempt.objects.select_related(
+                "submission", "challenge", "debrief"
+            )
+            .prefetch_related("challenge__rubric_items")
+            .get(pk=finished.pk)
+        )
 
     if daily.status in {DailyChallenge.Status.SUBMITTED, DailyChallenge.Status.COMPLETED}:
         if retrying_failed and daily.challenge_id == challenge.id:
@@ -469,14 +500,77 @@ def _grading_passed(grading: dict | None) -> bool:
         return False
 
 
+def _get_attempt_submission(attempt: ChallengeAttempt):
+    """Safe OneToOne access — missing related row must not raise."""
+    from django.core.exceptions import ObjectDoesNotExist
+
+    try:
+        return attempt.submission
+    except ObjectDoesNotExist:
+        return None
+
+
 def _attempt_failed_grading(attempt: ChallengeAttempt | None) -> bool:
+    """True when the attempt is missing or its stored grade did not pass."""
     if attempt is None:
         return False
-    submission = getattr(attempt, "submission", None)
+    # Explicit retry state from the fail path.
+    if attempt.status == ChallengeAttempt.Status.SUBMITTED:
+        return True
+    submission = _get_attempt_submission(attempt)
     if submission is None:
         return True
     grading = (getattr(submission, "metadata", None) or {}).get("grading") or {}
     return not _grading_passed(grading)
+
+
+def _user_passed_challenge(*, user: User, challenge_id: int) -> bool:
+    attempts = (
+        ChallengeAttempt.objects.filter(
+            user=user,
+            challenge_id=challenge_id,
+            status__in=[
+                ChallengeAttempt.Status.COMPLETED,
+                ChallengeAttempt.Status.SUBMITTED,
+            ],
+        )
+        .select_related("submission")
+        .order_by("-started_at")
+    )
+    for attempt in attempts:
+        if not _attempt_failed_grading(attempt):
+            return True
+    return False
+
+
+def _heal_passed_challenge_state(
+    *,
+    user: User,
+    challenge: Challenge,
+    attempt: ChallengeAttempt,
+    daily: DailyChallenge | None,
+) -> None:
+    """Ensure roadmap/daily reflect a prior passing grade."""
+    if attempt.status != ChallengeAttempt.Status.COMPLETED:
+        attempt.status = ChallengeAttempt.Status.COMPLETED
+        if attempt.completed_at is None:
+            attempt.completed_at = timezone.now()
+        attempt.save(update_fields=["status", "completed_at"])
+
+    if daily is not None and daily.challenge_id == challenge.id:
+        if daily.status != DailyChallenge.Status.COMPLETED:
+            daily.status = DailyChallenge.Status.COMPLETED
+            daily.save(update_fields=["status", "updated_at"])
+
+    DiagnosticRoadmapItem.objects.filter(
+        user=user,
+        challenge=challenge,
+    ).exclude(status="closed").update(status="closed")
+
+    next_item = get_active_roadmap_item(user=user)
+    if next_item is not None and next_item.status != "in_progress":
+        next_item.status = "in_progress"
+        next_item.save(update_fields=["status"])
 
 
 def _flatten_research_data(research_data: dict | None) -> str:

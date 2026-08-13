@@ -204,6 +204,98 @@ def test_failed_submit_can_be_retried() -> None:
 
 
 @pytest.mark.django_db
+def test_legacy_failed_completed_attempt_can_be_retried() -> None:
+    """Old bug marked failed grades as COMPLETED — those must still be retryable."""
+    user = User.objects.create_user(email="legacyretry@example.com", password="x")
+    challenge = Challenge.objects.create(
+        title="Defend legacy",
+        slug="defend-legacy-retry",
+        modality=Challenge.Modality.DEFEND,
+        difficulty=2,
+    )
+    ChallengeModelAnswer.objects.create(
+        challenge=challenge,
+        reference_text=(
+            "Keep the page as a Server Component and push use client to the smallest "
+            "interactive leaves so the JS bundle stays small."
+        ),
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Argues for leaf-level client boundaries",
+        order=1,
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="Mentions JS bundle or server-capability cost",
+        order=2,
+    )
+    attempt = ChallengeAttempt.objects.create(
+        user=user,
+        challenge=challenge,
+        status=ChallengeAttempt.Status.COMPLETED,
+    )
+    from apps.challenges.models import Submission
+
+    Submission.objects.create(
+        attempt=attempt,
+        text_answer="idk",
+        metadata={"grading": {"is_correct": False, "score": 0.0, "method": "keyword_rubric"}},
+    )
+
+    retried = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={
+            "text_answer": (
+                "Keep the page as a Server Component and put use client only on the "
+                "interactive leaf widget so we do not inflate the client JS bundle."
+            ),
+        },
+    )
+    assert retried.id == attempt.id
+    assert retried.status == ChallengeAttempt.Status.COMPLETED
+    assert (retried.submission.metadata.get("grading") or {}).get("is_correct") is True
+
+
+@pytest.mark.django_db
+def test_passed_submit_is_idempotent() -> None:
+    user = User.objects.create_user(email="idempotent@example.com", password="x")
+    challenge = Challenge.objects.create(
+        title="Theory idempotent",
+        slug="theory-idempotent",
+        modality=Challenge.Modality.THEORY,
+        difficulty=1,
+    )
+    ChallengeModelAnswer.objects.create(
+        challenge=challenge,
+        reference_text="rate limiting",
+    )
+    ChallengeRubricItem.objects.create(
+        challenge=challenge,
+        text="rate limiting",
+        order=1,
+    )
+
+    first = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={"text_answer": "Use rate limiting at the gateway."},
+    )
+    assert first.status == ChallengeAttempt.Status.COMPLETED
+
+    second = submit_challenge(
+        user=user,
+        challenge_id=challenge.id,
+        payload={"text_answer": "Use rate limiting at the gateway again."},
+    )
+    assert second.id == first.id
+    assert second.status == ChallengeAttempt.Status.COMPLETED
+    # Original passing answer is preserved (no silent overwrite).
+    assert second.submission.text_answer == first.submission.text_answer
+
+
+@pytest.mark.django_db
 def test_submit_challenge_api_returns_completed() -> None:
     user = User.objects.create_user(email="chalapi@example.com", password="x")
     api = APIClient()
