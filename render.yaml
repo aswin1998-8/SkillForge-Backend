@@ -33,7 +33,9 @@ services:
           property: connectionString
       # Also set in Render dashboard:
       # SECRET_KEY, CORS_ALLOWED_ORIGINS, CSRF_TRUSTED_ORIGINS, FRONTEND_URL,
-      # CORS_ALLOWED_ORIGIN_REGEXES (optional), GOOGLE_CLIENT_ID, etc.
+      # CORS_ALLOWED_ORIGIN_REGEXES (optional), GOOGLE_CLIENT_ID,
+      # RESEND_API_KEY (invite email; SMTP is blocked on free Render),
+      # DEFAULT_FROM_EMAIL (must be allowed by Resend).
   - type: worker
     name: skillforge-celery
     runtime: python

@@ -6,7 +6,7 @@ from typing import Any
 
 from django.db.models import Count, Max, Q
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -260,3 +260,13 @@ class StaffUserDetailView(APIView):
                 "gaps": gap_rows,
             }
         )
+
+    def delete(self, request: Request, pk: int) -> Response:
+        user = User.objects.filter(pk=pk).first()
+        if user is None:
+            raise NotFound("User not found.")
+        if user.pk == request.user.pk:
+            raise ValidationError({"id": "You cannot delete your own account."})
+        email = user.email
+        user.delete()
+        return success_response({"id": pk, "email": email}, message="User deleted.")

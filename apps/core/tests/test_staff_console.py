@@ -117,7 +117,7 @@ def test_staff_invite_smtp_failure_does_not_mark_invited(
     signup = WaitlistSignup.objects.create(email="fail@skillforge.test")
     api.force_authenticate(user=staff_user)
     with patch(
-        "apps.core.tasks.send_mail",
+        "apps.core.mail.send_mail",
         side_effect=OSError("smtp down"),
     ):
         response = api.post(f"/api/v1/staff/waitlist/{signup.id}/invite/")
@@ -125,6 +125,42 @@ def test_staff_invite_smtp_failure_does_not_mark_invited(
     signup.refresh_from_db()
     assert signup.invited is False
     assert not InviteToken.objects.filter(email="fail@skillforge.test").exists()
+
+
+@pytest.mark.django_db
+def test_production_invite_without_mail_provider_fails(
+    api: APIClient, staff_user: User, settings
+) -> None:
+    settings.DEBUG = False
+    settings.RESEND_API_KEY = ""
+    settings.EMAIL_HOST = ""
+    settings.EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    signup = WaitlistSignup.objects.create(email="noprovider@skillforge.test")
+    api.force_authenticate(user=staff_user)
+    response = api.post(f"/api/v1/staff/waitlist/{signup.id}/invite/")
+    assert response.status_code == 400
+    signup.refresh_from_db()
+    assert signup.invited is False
+
+
+@pytest.mark.django_db
+def test_invite_uses_resend_when_configured(
+    api: APIClient, staff_user: User, settings
+) -> None:
+    settings.DEBUG = False
+    settings.RESEND_API_KEY = "re_test"
+    settings.EMAIL_HOST = ""
+    settings.EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+    signup = WaitlistSignup.objects.create(email="resend@skillforge.test")
+    api.force_authenticate(user=staff_user)
+    fake = type("R", (), {"status_code": 200, "text": "{}"})()
+    with patch("apps.core.mail.requests.post", return_value=fake) as post:
+        response = api.post(f"/api/v1/staff/waitlist/{signup.id}/invite/")
+    assert response.status_code == 200
+    post.assert_called_once()
+    assert post.call_args.kwargs["json"]["to"] == ["resend@skillforge.test"]
+    signup.refresh_from_db()
+    assert signup.invited is True
 
 
 @pytest.mark.django_db
@@ -265,3 +301,18 @@ def test_staff_users_forbidden_for_non_staff(api: APIClient, normal_user: User) 
     api.force_authenticate(user=normal_user)
     assert api.get("/api/v1/staff/users/").status_code == 403
     assert api.get(f"/api/v1/staff/users/{normal_user.id}/").status_code == 403
+    assert api.delete(f"/api/v1/staff/users/{normal_user.id}/").status_code == 403
+
+
+@pytest.mark.django_db
+def test_staff_can_delete_user_but_not_self(
+    api: APIClient, staff_user: User, normal_user: User
+) -> None:
+    api.force_authenticate(user=staff_user)
+    blocked = api.delete(f"/api/v1/staff/users/{staff_user.id}/")
+    assert blocked.status_code == 400
+    assert User.objects.filter(pk=staff_user.id).exists()
+
+    deleted = api.delete(f"/api/v1/staff/users/{normal_user.id}/")
+    assert deleted.status_code == 200
+    assert not User.objects.filter(pk=normal_user.id).exists()

@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.core.mail import send_mail
 from rest_framework.exceptions import ValidationError
+
+from apps.core.mail import send_outbound_email
 
 logger = logging.getLogger(__name__)
 
@@ -22,26 +23,22 @@ def send_invite_email(email: str, token: str) -> None:
         "This link expires in 7 days and can be used once. "
         "Sign up with the same email this invite was sent to.\n"
     )
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [email],
-        fail_silently=False,
-    )
+    send_outbound_email(to=email, subject=subject, text=message)
 
 
 def dispatch_invite_email(email: str, token: str) -> None:
     """Send immediately in-process. Celery/Redis is not required on Render."""
     try:
         send_invite_email(email, token)
+    except ValidationError:
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.exception("Failed to send invite email to %s", email)
         raise ValidationError(
             {
                 "email": (
-                    "Could not send the invite email. Set EMAIL_HOST (and SMTP "
-                    "credentials) on the server, or EMAIL_BACKEND=smtp."
+                    "Could not send the invite email. Set RESEND_API_KEY on Render "
+                    "(SMTP is often blocked) or EMAIL_HOST credentials."
                 )
             }
         ) from exc
