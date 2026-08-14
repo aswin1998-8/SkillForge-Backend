@@ -230,12 +230,16 @@ def _is_blocked_by_texts(question: Question, blocked_texts: Iterable[str]) -> bo
 def _candidate_questions(
     session: DiagnosticSession,
     *,
-    stage: str,
+    stage: str | None = None,
     competency_area: str,
+    modality: str | None = None,
     max_difficulty: int | None = None,
     min_difficulty: int | None = None,
 ) -> list[Question]:
-    modality = STAGE_MODALITY_MAP[stage]
+    if modality is None:
+        if stage is None:
+            return []
+        modality = STAGE_MODALITY_MAP[stage]
     framework_ids = list(session.selected_frameworks.values_list("id", flat=True))
     fundamentals_ids = list(
         session.selected_frameworks.values_list("fundamentals_topic_id", flat=True)
@@ -270,7 +274,7 @@ def _candidate_questions(
     rng = _rng(
         session.user_id,
         session.id,
-        stage,
+        stage or modality,
         competency_area,
         min_difficulty,
         max_difficulty,
@@ -436,3 +440,259 @@ def next_stage(current_stage: str | None) -> str | None:
     if idx + 1 >= len(STAGE_ORDER):
         return None
     return STAGE_ORDER[idx + 1]
+
+
+FOUNDATIONAL_SKIP_COUNT = 3
+HARD_MODALITIES = [
+    Question.Modality.CODING,
+    Question.Modality.FIND_ISSUES,
+    Question.Modality.DIAGNOSE,
+]
+EASY_FOLLOW_MODALITIES = [
+    Question.Modality.SCENARIO,
+    Question.Modality.CODING,
+    Question.Modality.FIND_ISSUES,
+]
+EASY_SKIP_MODALITIES = {
+    Question.Modality.FOUNDATIONAL,
+    Question.Modality.SCENARIO,
+}
+
+MODALITY_TO_STAGE = {
+    Question.Modality.FOUNDATIONAL: DiagnosticSession.Stage.FOUNDATIONAL,
+    Question.Modality.SCENARIO: DiagnosticSession.Stage.SCENARIO,
+    Question.Modality.FIND_ISSUES: DiagnosticSession.Stage.FIND_ISSUES,
+    Question.Modality.CODING: DiagnosticSession.Stage.CODING,
+    Question.Modality.DIAGNOSE: DiagnosticSession.Stage.DEBUGGING,
+    Question.Modality.DEFEND: DiagnosticSession.Stage.SCENARIO,
+    Question.Modality.EXPLAIN: DiagnosticSession.Stage.SCENARIO,
+    Question.Modality.COMMUNICATE: DiagnosticSession.Stage.SCENARIO,
+    Question.Modality.ARCHITECT: DiagnosticSession.Stage.SCENARIO,
+}
+
+
+def _skip_count() -> int:
+    return int(getattr(settings, "FOUNDATIONAL_SKIP_COUNT", FOUNDATIONAL_SKIP_COUNT))
+
+
+def _session_budget() -> int:
+    return int(getattr(settings, "DIAGNOSTIC_SESSION_QUESTION_BUDGET", 15))
+
+
+def skipped_easy_areas(session: DiagnosticSession) -> list[str]:
+    tracks = session.area_tracks or {}
+    return [
+        area
+        for area, track in tracks.items()
+        if isinstance(track, dict) and track.get("skip_easy")
+    ]
+
+
+def _empty_track() -> dict:
+    return {
+        "foundational_asked": 0,
+        "foundational_correct": 0,
+        "skip_easy": False,
+        "hard_asked": 0,
+        "easy_follow_asked": 0,
+        "asked_modalities": [],
+    }
+
+
+def _track_for(session: DiagnosticSession, competency_area: str) -> dict:
+    tracks = dict(session.area_tracks or {})
+    track = dict(tracks.get(competency_area) or _empty_track())
+    for key, default in _empty_track().items():
+        track.setdefault(key, default)
+    return track
+
+
+def update_area_track_after_answer(
+    session: DiagnosticSession,
+    *,
+    session_question: SessionQuestion,
+    is_correct: bool | None,
+) -> dict | None:
+    """Update per-area skip-ahead state. Returns skip event or None."""
+    area = session_question.competency_area or session_question.content_question.competency_area
+    if not area:
+        return None
+    modality = session_question.content_question.modality
+    tracks = dict(session.area_tracks or {})
+    track = _track_for(session, area)
+    asked_modalities = list(track.get("asked_modalities") or [])
+    asked_modalities.append(modality)
+    track["asked_modalities"] = asked_modalities
+
+    skip_event = None
+    if modality == Question.Modality.FOUNDATIONAL:
+        track["foundational_asked"] = int(track.get("foundational_asked") or 0) + 1
+        if is_correct:
+            track["foundational_correct"] = int(track.get("foundational_correct") or 0) + 1
+        asked = int(track["foundational_asked"])
+        correct = int(track["foundational_correct"])
+        if asked >= _skip_count() and correct >= _skip_count() and not track.get("skip_easy"):
+            track["skip_easy"] = True
+            skip_event = {
+                "competency_area": area,
+                "reason": "strong_foundations_skip_easy",
+                "foundational_asked": asked,
+                "foundational_correct": correct,
+            }
+    elif track.get("skip_easy") or modality in HARD_MODALITIES:
+        track["hard_asked"] = int(track.get("hard_asked") or 0) + 1
+    else:
+        track["easy_follow_asked"] = int(track.get("easy_follow_asked") or 0) + 1
+
+    tracks[area] = track
+    session.area_tracks = tracks
+    session.save(update_fields=["area_tracks"])
+    return skip_event
+
+
+def _modalities_for_track(track: dict) -> list[str]:
+    asked = int(track.get("foundational_asked") or 0)
+    extra = int(track.get("hard_asked") or 0) + int(track.get("easy_follow_asked") or 0)
+    if asked < _skip_count():
+        return [Question.Modality.FOUNDATIONAL]
+    if extra >= 1:
+        return []
+    if track.get("skip_easy"):
+        return list(HARD_MODALITIES)
+    return list(EASY_FOLLOW_MODALITIES)
+
+
+def _has_open_asked(session: DiagnosticSession) -> bool:
+    return session.questions.filter(status=SessionQuestion.Status.ASKED).exists()
+
+
+def _create_session_question(
+    session: DiagnosticSession,
+    *,
+    question: Question,
+    decision: dict,
+) -> SessionQuestion:
+    stage = MODALITY_TO_STAGE.get(question.modality, DiagnosticSession.Stage.FOUNDATIONAL)
+    order = (
+        session.questions.filter(stage=stage)
+        .order_by("-order")
+        .values_list("order", flat=True)
+        .first()
+        or 0
+    ) + 1
+    sq = SessionQuestion.objects.create(
+        session=session,
+        content_question=question,
+        stage=stage,
+        order=order,
+        competency_area=question.competency_area,
+        status=SessionQuestion.Status.ASKED,
+    )
+    session.current_stage = stage
+    log = list(session.selection_log or [])
+    log.append(decision)
+    session.selection_log = log
+    session.save(update_fields=["current_stage", "selection_log"])
+    return sq
+
+
+def _pick_question_for_modality(
+    session: DiagnosticSession,
+    *,
+    competency_area: str,
+    modality: str,
+) -> tuple[Question | None, dict]:
+    years = _user_years(session.user)
+    min_tier, max_tier, start_tier = experience_difficulty_band(years)
+    bump = int(getattr(session, "difficulty_bump", 0) or 0)
+    min_tier = min(5, min_tier + bump)
+    max_tier = min(5, max_tier + bump)
+    min_diff = min(5, start_tier + bump) if modality in HARD_MODALITIES else None
+    candidates = _candidate_questions(
+        session,
+        competency_area=competency_area,
+        modality=modality,
+        min_difficulty=min_diff,
+        max_difficulty=max_tier,
+    )
+    if not candidates:
+        candidates = _candidate_questions(
+            session,
+            competency_area=competency_area,
+            modality=modality,
+        )
+    question = candidates[0] if candidates else None
+    decision = {
+        "stage": MODALITY_TO_STAGE.get(modality, DiagnosticSession.Stage.FOUNDATIONAL),
+        "competency_area": competency_area,
+        "reason": "area_track_modality",
+        "modality": modality,
+        "question_id": question.id if question else None,
+    }
+    return question, decision
+
+
+def allocate_next_question(session: DiagnosticSession) -> SessionQuestion | None:
+    """Allocate a single next question using per-area skip-ahead tracks."""
+    if _has_open_asked(session):
+        return session.questions.filter(status=SessionQuestion.Status.ASKED).order_by("order").first()
+
+    if session.questions.count() >= _session_budget():
+        return None
+
+    competencies = session.assessment_competencies or build_assessment_competencies(session)
+    if not competencies:
+        return None
+
+    counts: dict[str, int] = {}
+    for sq in session.questions.all():
+        area = sq.competency_area or ""
+        counts[area] = counts.get(area, 0) + 1
+
+    ordered = sorted(
+        competencies,
+        key=lambda c: (counts.get(c.get("competency_area") or "", 0), competencies.index(c)),
+    )
+
+    for comp in ordered:
+        area = comp.get("competency_area") or ""
+        if not area:
+            continue
+        track = _track_for(session, area)
+        for modality in _modalities_for_track(track):
+            if track.get("skip_easy") and modality in EASY_SKIP_MODALITIES:
+                continue
+            question, decision = _pick_question_for_modality(
+                session,
+                competency_area=area,
+                modality=modality,
+            )
+            if question is None:
+                continue
+            decision["skip_easy"] = bool(track.get("skip_easy"))
+            decision["area_track"] = track
+            return _create_session_question(session, question=question, decision=decision)
+
+    # Last resort: any remaining unseen question for selected frameworks.
+    used = _used_question_ids(session)
+    seen_forever = _user_seen_diagnostic_question_ids(session.user_id)
+    framework_ids = list(session.selected_frameworks.values_list("id", flat=True))
+    fundamentals_ids = list(
+        session.selected_frameworks.values_list("fundamentals_topic_id", flat=True)
+    )
+    fallback_qs = Question.objects.filter(is_active=True).filter(
+        models.Q(framework_topic_id__in=framework_ids)
+        | models.Q(fundamentals_topic_id__in=fundamentals_ids)
+    ).exclude(id__in=used | seen_forever)
+    skipped = set(skipped_easy_areas(session))
+    for fallback in fallback_qs.order_by("difficulty_tier", "id"):
+        if fallback.competency_area in skipped and fallback.modality in EASY_SKIP_MODALITIES:
+            continue
+        decision = {
+            "reason": "fallback_any_unseen",
+            "competency_area": fallback.competency_area,
+            "modality": fallback.modality,
+            "question_id": fallback.id,
+        }
+        return _create_session_question(session, question=fallback, decision=decision)
+    return None

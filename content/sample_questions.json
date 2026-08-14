@@ -14,6 +14,72 @@
     },
     {
       "framework": "react",
+      "competency_area": "hooks",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "Why must you include every value read inside an effect in its dependency array?",
+      "choices": [
+        { "text": "So the effect sees current values instead of a stale closure", "is_correct": true },
+        { "text": "So React can skip rendering the component", "is_correct": false },
+        { "text": "So the cleanup function never runs", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "react",
+      "competency_area": "hooks",
+      "modality": "foundational",
+      "difficulty_tier": 1,
+      "question_text": "Calling a setState updater with the same primitive value typically:",
+      "choices": [
+        { "text": "Bails out of re-rendering that state update", "is_correct": true },
+        { "text": "Always remounts the component", "is_correct": false },
+        { "text": "Forces a sibling to unmount", "is_correct": false }
+      ]
+    },
+    {
+      "framework": "react",
+      "competency_area": "hooks",
+      "modality": "coding",
+      "difficulty_tier": 2,
+      "language": "javascript",
+      "question_text": "Implement solve(input) where input is JSON {count: number}. Return JSON {count: count+1} as if applying a useState increment.",
+      "test_cases": [
+        { "input": "{\"count\":0}", "expected_output": "{\"count\":1}", "is_hidden": false },
+        { "input": "{\"count\":2}", "expected_output": "{\"count\":3}", "is_hidden": false }
+      ]
+    },
+    {
+      "framework": "react",
+      "competency_area": "hooks",
+      "modality": "diagnose",
+      "difficulty_tier": 3,
+      "question_text": "An effect that fetches on every keystroke has [query] as deps and no abort. Users see stale results overwrite fresh ones. What is going wrong?",
+      "reference_answer": {
+        "text": "In-flight requests race; a slower older request can resolve last. Abort the previous fetch or ignore stale responses (sequence id / AbortController).",
+        "rubric_points": [
+          "Identifies request race or stale response",
+          "Mentions abort or ignoring outdated results",
+          "Ties the bug to the effect re-running on query change"
+        ]
+      }
+    },
+    {
+      "framework": "react",
+      "competency_area": "hooks",
+      "modality": "scenario",
+      "difficulty_tier": 2,
+      "question_text": "A teammate puts an object literal in a useEffect dependency array and the effect loops. What should they do instead?",
+      "reference_answer": {
+        "text": "Object literals get a new reference each render. Depend on primitive fields, memoize the object, or compare serialized keys.",
+        "rubric_points": [
+          "Identifies new object identity each render",
+          "Recommends primitive deps or memoization",
+          "Explains why that stops the loop"
+        ]
+      }
+    },
+    {
+      "framework": "react",
       "competency_area": "state_management",
       "modality": "scenario",
       "difficulty_tier": 2,

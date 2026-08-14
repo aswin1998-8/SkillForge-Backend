@@ -10,9 +10,9 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 
 from apps.diagnostics.adaptive_selector import (
     STAGE_ORDER,
-    allocate_stage_questions,
+    allocate_next_question,
     build_assessment_competencies,
-    next_stage,
+    update_area_track_after_answer,
 )
 from apps.diagnostics.code_executor import run_test_cases
 from apps.diagnostics.grading import (
@@ -123,7 +123,7 @@ def start_session(*, user, goal: str, framework_slugs: list[str]) -> DiagnosticS
     session.assessment_competencies = build_assessment_competencies(session)
     session.save(update_fields=["assessment_competencies"])
 
-    allocate_stage_questions(session, STAGE_ORDER[0])
+    allocate_next_question(session)
     if not session.questions.exists():
         session.status = DiagnosticSession.Status.FAILED
         session.error = "No questions available for selected frameworks."
@@ -133,44 +133,12 @@ def start_session(*, user, goal: str, framework_slugs: list[str]) -> DiagnosticS
     return session
 
 
-def _stage_fully_answered(session: DiagnosticSession, stage: str) -> bool:
-    stage_questions = session.questions.filter(stage=stage).select_related(
-        "content_question"
-    )
-    if not stage_questions.exists():
-        return True
-    for sq in stage_questions:
-        try:
-            sq.answer
-        except SessionAnswer.DoesNotExist:
-            return False
-        # All modalities complete on ANSWERED (keyword auto-grade for open-ended).
-        if sq.status not in {
-            SessionQuestion.Status.ANSWERED,
-            SessionQuestion.Status.SELF_RATED,
-        }:
-            return False
-    return True
-
-
-def _advance_session_stage(session: DiagnosticSession) -> None:
-    while session.current_stage and _stage_fully_answered(session, session.current_stage):
-        nxt = next_stage(session.current_stage)
-        if nxt is None:
-            synthesize_session(session)
-            return
-        session.current_stage = nxt
-        session.save(update_fields=["current_stage"])
-        created = allocate_stage_questions(session, nxt)
-        if not created:
-            nxt2 = next_stage(nxt)
-            if nxt2 is None:
-                synthesize_session(session)
-                return
-            session.current_stage = nxt2
-            session.save(update_fields=["current_stage"])
-            continue
+def _maybe_allocate_next_or_complete(session: DiagnosticSession) -> None:
+    if session.questions.filter(status=SessionQuestion.Status.ASKED).exists():
         return
+    nxt = allocate_next_question(session)
+    if nxt is None:
+        synthesize_session(session)
 
 
 @transaction.atomic
@@ -191,18 +159,26 @@ def submit_stage_answers(
         except SessionQuestion.DoesNotExist as exc:
             raise ValidationError(f"Invalid question_id: {sq_id}") from exc
 
-        if sq.stage != session.current_stage:
-            raise ValidationError("Question does not belong to the current stage.")
+        if sq.status not in {
+            SessionQuestion.Status.ASKED,
+            SessionQuestion.Status.ANSWERED,
+        }:
+            raise ValidationError("Question cannot accept answers in its current status.")
 
-        grade_session_answer(
+        answer = grade_session_answer(
             session_question=sq,
             answer_text=item.get("answer_text") or "",
             choice_id=item.get("choice_id"),
             confidence_rating=item.get("confidence_rating"),
             run_tests_fn=run_test_cases,
         )
+        update_area_track_after_answer(
+            session,
+            session_question=sq,
+            is_correct=answer.is_correct,
+        )
 
-    _advance_session_stage(session)
+    _maybe_allocate_next_or_complete(session)
     return get_session_for_user(user=user, session_id=session_id)
 
 
@@ -283,7 +259,7 @@ def self_rate_answer(
     answer.question.status = SessionQuestion.Status.SELF_RATED
     answer.question.save(update_fields=["status"])
 
-    _advance_session_stage(session)
+    _maybe_allocate_next_or_complete(session)
     return answer
 
 

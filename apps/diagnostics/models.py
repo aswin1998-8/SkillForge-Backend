@@ -231,6 +231,7 @@ class DiagnosticSession(models.Model):
         blank=True,
     )
     selection_log = models.JSONField(default=list, blank=True)
+    area_tracks = models.JSONField(default=dict, blank=True)
     synthesis = models.JSONField(default=dict, blank=True)
     error = models.TextField(blank=True, default="")
     difficulty_bump = models.PositiveSmallIntegerField(default=0)
@@ -315,6 +316,10 @@ class DiagnosticRoadmapItem(models.Model):
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
         USE_AI = "USE_AI", "Use AI without skill atrophy"
         COMMUNICATE = "COMMUNICATE", "Communicate"
+        AUDIT_AI_PR = "AUDIT_AI_PR", "Audit the AI PR"
+        EXPLAIN_AI_DIFF = "EXPLAIN_AI_DIFF", "Explain AI diff"
+        INHERITED_CODEBASE = "INHERITED_CODEBASE", "Inherited codebase"
+        WAR_ROOM = "WAR_ROOM", "War room"
 
     session = models.ForeignKey(
         DiagnosticSession,

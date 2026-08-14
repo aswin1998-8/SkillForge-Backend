@@ -17,6 +17,10 @@ class Challenge(models.Model):
         EXPLAIN_CODE = "EXPLAIN_CODE", "Explain code"
         USE_AI = "USE_AI", "Use AI without skill atrophy"
         COMMUNICATE = "COMMUNICATE", "Communicate"
+        AUDIT_AI_PR = "AUDIT_AI_PR", "Audit the AI PR"
+        EXPLAIN_AI_DIFF = "EXPLAIN_AI_DIFF", "Explain AI diff"
+        INHERITED_CODEBASE = "INHERITED_CODEBASE", "Inherited codebase"
+        WAR_ROOM = "WAR_ROOM", "War room"
 
     title = models.CharField(max_length=255)
     slug = models.SlugField(max_length=255, unique=True)

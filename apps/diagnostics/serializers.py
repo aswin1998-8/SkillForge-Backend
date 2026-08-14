@@ -123,6 +123,8 @@ class DiagnosticRoadmapItemSerializer(serializers.ModelSerializer):
 class DiagnosticSessionSerializer(serializers.ModelSerializer):
     questions = serializers.SerializerMethodField()
     current_questions = serializers.SerializerMethodField()
+    skipped_easy_areas = serializers.SerializerMethodField()
+    question_budget = serializers.SerializerMethodField()
     roadmap_items = DiagnosticRoadmapItemSerializer(many=True, read_only=True)
     selected_frameworks = serializers.SerializerMethodField()
 
@@ -143,6 +145,8 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
             "difficulty_bump",
             "questions",
             "current_questions",
+            "skipped_easy_areas",
+            "question_budget",
             "roadmap_items",
             "created_at",
             "updated_at",
@@ -162,17 +166,18 @@ class DiagnosticSessionSerializer(serializers.ModelSerializer):
         return SessionQuestionSerializer(obj.questions.all(), many=True).data
 
     def get_current_questions(self, obj):
-        if not obj.current_stage:
-            return []
-        qs = obj.questions.filter(
-            stage=obj.current_stage,
-            status__in=[
-                SessionQuestion.Status.ASKED,
-                SessionQuestion.Status.ANSWERED,
-                SessionQuestion.Status.REVEALED,
-            ],
-        ).order_by("order")
+        qs = obj.questions.filter(status=SessionQuestion.Status.ASKED).order_by("order")
         return SessionQuestionSerializer(qs, many=True).data
+
+    def get_skipped_easy_areas(self, obj) -> list[str]:
+        from apps.diagnostics.adaptive_selector import skipped_easy_areas
+
+        return skipped_easy_areas(obj)
+
+    def get_question_budget(self, obj) -> int:
+        from django.conf import settings
+
+        return int(getattr(settings, "DIAGNOSTIC_SESSION_QUESTION_BUDGET", 15))
 
 
 class StartDiagnosticSessionSerializer(serializers.Serializer):

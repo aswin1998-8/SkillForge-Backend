@@ -9,6 +9,7 @@ from apps.challenges.views import (
     ChallengeDetailView,
     ChallengeRunTestsView,
     ChallengeSubmitView,
+    ChallengeWarRoomBeatsView,
     TodayChallengeView,
 )
 
@@ -24,6 +25,11 @@ urlpatterns = [
         "challenges/<int:challenge_id>/run-tests/",
         ChallengeRunTestsView.as_view(),
         name="challenge-run-tests",
+    ),
+    path(
+        "challenges/<int:challenge_id>/beats/",
+        ChallengeWarRoomBeatsView.as_view(),
+        name="challenge-war-room-beats",
     ),
     path(
         "attempts/<int:attempt_id>/confidence/",

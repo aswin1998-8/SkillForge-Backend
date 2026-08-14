@@ -30,6 +30,26 @@ MODALITY_TO_CHALLENGE = {
     Question.Modality.COMMUNICATE: DiagnosticRoadmapItem.Modality.COMMUNICATE,
 }
 
+CHALLENGE_MODALITY_ALIASES = {
+    DiagnosticRoadmapItem.Modality.EXPLAIN_CODE: [
+        DiagnosticRoadmapItem.Modality.EXPLAIN_CODE,
+        DiagnosticRoadmapItem.Modality.EXPLAIN_AI_DIFF,
+        DiagnosticRoadmapItem.Modality.AUDIT_AI_PR,
+    ],
+    DiagnosticRoadmapItem.Modality.CODING: [
+        DiagnosticRoadmapItem.Modality.CODING,
+        DiagnosticRoadmapItem.Modality.INHERITED_CODEBASE,
+    ],
+    DiagnosticRoadmapItem.Modality.DIAGNOSE: [
+        DiagnosticRoadmapItem.Modality.DIAGNOSE,
+        DiagnosticRoadmapItem.Modality.WAR_ROOM,
+    ],
+    DiagnosticRoadmapItem.Modality.COMMUNICATE: [
+        DiagnosticRoadmapItem.Modality.COMMUNICATE,
+        DiagnosticRoadmapItem.Modality.WAR_ROOM,
+    ],
+}
+
 TRANSFER_MAP = [
     {
         "from_current_role": "Async / concurrency mental models",
@@ -489,7 +509,8 @@ def _find_challenge_for_topic(
     def base_qs(*, modality_filter: str | None = modality):
         qs = Challenge.objects.filter(is_active=True)
         if modality_filter:
-            qs = qs.filter(modality=modality_filter)
+            aliases = CHALLENGE_MODALITY_ALIASES.get(modality_filter, [modality_filter])
+            qs = qs.filter(modality__in=aliases)
         if stack:
             qs = qs.filter(challenge_skills__skill__slug__in=stack).distinct()
         if excluded:

@@ -388,6 +388,15 @@ def submit_challenge(
     architecture_data = payload.get("architecture_data") or {}
     research_data = payload.get("research_data") or {}
     metadata = dict(payload.get("metadata") or {})
+    files = metadata.get("files")
+    if isinstance(files, dict) and files:
+        code = _combine_workspace_files(files, fallback=code)
+
+    if challenge.modality == Challenge.Modality.WAR_ROOM:
+        room = metadata.get("war_room") or {}
+        answers = room.get("answers") if isinstance(room, dict) else {}
+        if isinstance(answers, dict) and answers:
+            text_answer = "\n\n".join(str(v) for v in answers.values() if v)
 
     grading = _grade_challenge_submission(
         challenge=challenge,
@@ -395,6 +404,7 @@ def submit_challenge(
         code=code,
         architecture_data=architecture_data,
         research_data=research_data,
+        metadata=metadata,
     )
     metadata["grading"] = grading
     passed = _grading_passed(grading)
@@ -667,11 +677,39 @@ def _parse_workspace_test_cases(config: dict) -> list:
     return cases
 
 
+def _combine_workspace_files(files: dict, fallback: str = "") -> str:
+    items = [
+        (str(path), str(content))
+        for path, content in files.items()
+        if content is not None
+    ]
+    items.sort(key=lambda pc: ("def solve" in pc[1], pc[0]))
+    stems = {
+        str(path).rsplit("/", 1)[-1].rsplit(".", 1)[0]
+        for path, _content in items
+    }
+    parts: list[str] = []
+    for path, content in items:
+        cleaned_lines = []
+        for line in content.splitlines():
+            stripped = line.strip()
+            skip = False
+            if stripped.startswith("from "):
+                mod = stripped.split()[1].split(".")[0]
+                if mod in stems:
+                    skip = True
+            if not skip:
+                cleaned_lines.append(line)
+        parts.append(f"# file: {path}\n" + "\n".join(cleaned_lines))
+    return "\n\n".join(parts) if parts else fallback
+
+
 def run_challenge_tests_preview(
     *,
     user: User,
     challenge_id: int,
     code: str,
+    files: dict | None = None,
 ) -> dict:
     """Run visible test cases only (LeetCode-style Run Code)."""
     from apps.diagnostics.code_executor import run_test_cases
@@ -682,7 +720,10 @@ def run_challenge_tests_preview(
         raise ValidationError(
             "Complete your current roadmap challenge before unlocking the next one."
         )
-    if challenge.modality != Challenge.Modality.CODING:
+    if challenge.modality not in {
+        Challenge.Modality.CODING,
+        Challenge.Modality.INHERITED_CODEBASE,
+    }:
         raise ValidationError("Test execution is only available for coding challenges.")
 
     config = challenge.workspace_config or {}
@@ -695,7 +736,10 @@ def run_challenge_tests_preview(
         raise ValidationError("No visible test cases configured for this challenge.")
 
     language = _normalize_execution_language(config.get("language"))
-    results = run_test_cases(code=code or "", language=language, test_cases=visible)
+    source = code or ""
+    if isinstance(files, dict) and files:
+        source = _combine_workspace_files(files, fallback=source)
+    results = run_test_cases(code=source, language=language, test_cases=visible)
     # Ensure visible payload never leaks hidden cases.
     case_input_by_id = {c.id: c.input for c in visible}
     public_results = []
@@ -727,12 +771,15 @@ def _grade_challenge_submission(
     code: str,
     architecture_data: dict,
     research_data: dict,
+    metadata: dict | None = None,
 ) -> dict:
     from apps.core.keyword_grade import grade_open_ended_keywords
     from apps.diagnostics.code_executor import run_test_cases
+    from apps.challenges.issue_match import grade_planted_issues
 
     modality = challenge.modality
     config = challenge.workspace_config or {}
+    metadata = metadata or {}
     model = getattr(challenge, "model_answer", None)
     reference_text = getattr(model, "reference_text", "") if model else ""
     rubric_items = list(challenge.rubric_items.all())
@@ -741,7 +788,14 @@ def _grade_challenge_submission(
         (i.strength_fragment or i.gap_fragment or "") for i in rubric_items if i.text
     ]
 
-    if modality == Challenge.Modality.CODING:
+    if modality == Challenge.Modality.AUDIT_AI_PR:
+        planted = config.get("planted_issues") or []
+        reported = metadata.get("findings") or metadata.get("reported_issues") or []
+        if not isinstance(reported, list):
+            reported = []
+        return grade_planted_issues(planted=planted if isinstance(planted, list) else [], reported=reported)
+
+    if modality in {Challenge.Modality.CODING, Challenge.Modality.INHERITED_CODEBASE}:
         cases = _parse_workspace_test_cases(config)
         if not cases:
             return {
@@ -766,7 +820,7 @@ def _grade_challenge_submission(
             "test_results": results,
         }
 
-    if modality == Challenge.Modality.EXPLAIN_CODE:
+    if modality in {Challenge.Modality.EXPLAIN_CODE, Challenge.Modality.EXPLAIN_AI_DIFF}:
         is_correct, score, detail = grade_open_ended_keywords(
             answer_text=code or text_answer,
             rubric_points=rubric_points,

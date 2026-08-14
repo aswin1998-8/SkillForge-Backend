@@ -18,6 +18,7 @@ from apps.challenges.serializers import (
     DailyChallengeSerializer,
     DebriefChecklistSerializer,
     DebriefFollowUpsSerializer,
+    WarRoomBeatSerializer,
 )
 from apps.challenges.services import (
     challenge_is_locked,
@@ -31,6 +32,7 @@ from apps.challenges.services import (
     submit_challenge,
     submit_debrief_checklist,
 )
+from apps.challenges.war_room import advance_war_room_beat, war_room_state
 from apps.core.responses import success_response
 from django.utils import timezone
 
@@ -94,9 +96,28 @@ class ChallengeRunTestsView(APIView):
         payload = run_challenge_tests_preview(
             user=request.user,
             challenge_id=challenge_id,
-            code=serializer.validated_data["code"],
+            code=serializer.validated_data.get("code") or "",
+            files=serializer.validated_data.get("files") or {},
         )
         return success_response(payload, message="Tests executed")
+
+
+class ChallengeWarRoomBeatsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request, challenge_id: int) -> Response:
+        return success_response(war_room_state(user=request.user, challenge_id=challenge_id))
+
+    def post(self, request: Request, challenge_id: int) -> Response:
+        serializer = WarRoomBeatSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = advance_war_room_beat(
+            user=request.user,
+            challenge_id=challenge_id,
+            beat_id=serializer.validated_data["beat_id"],
+            text=serializer.validated_data["text"],
+        )
+        return success_response(payload, message="War room beat recorded")
 
 
 class AttemptConfidenceView(APIView):

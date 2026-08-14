@@ -69,6 +69,11 @@ class ChallengeSerializer(serializers.ModelSerializer):
             config["test_cases"] = public_cases
             config["hidden_test_count"] = hidden_count
             data["workspace_config"] = config
+        planted = config.get("planted_issues")
+        if isinstance(planted, list):
+            config.pop("planted_issues", None)
+            config["issue_count"] = len(planted)
+            data["workspace_config"] = config
         return data
 
 
@@ -173,7 +178,8 @@ class ChallengeSubmitSerializer(serializers.Serializer):
 
 
 class ChallengeRunTestsSerializer(serializers.Serializer):
-    code = serializers.CharField(required=True, allow_blank=False)
+    code = serializers.CharField(required=False, allow_blank=True, default="")
+    files = serializers.JSONField(required=False, default=dict)
 
 
 class ConfidenceCreateSerializer(serializers.Serializer):
@@ -187,6 +193,11 @@ class DebriefChecklistSerializer(serializers.Serializer):
 
 class DebriefFollowUpsSerializer(serializers.Serializer):
     follow_up_answers = serializers.DictField(child=serializers.CharField(allow_blank=True))
+
+
+class WarRoomBeatSerializer(serializers.Serializer):
+    beat_id = serializers.CharField(max_length=64)
+    text = serializers.CharField(allow_blank=False)
 
 
 class AnalyticsEventSerializer(serializers.Serializer):

@@ -868,6 +868,336 @@ SAMPLE_CHALLENGES = [
             },
         ],
     },
+    {
+        "title": "Audit the AI PR: checkout totals",
+        "slug": "audit-ai-pr-checkout-totals",
+        "modality": Challenge.Modality.AUDIT_AI_PR,
+        "difficulty": 2,
+        "skill": "python",
+        "competency_areas": ["testing", "error_handling"],
+        "directions": ["backend_mastery", "fe_to_be"],
+        "scenario": (
+            "An AI assistant opened a PR that 'fixes rounding' on checkout totals. "
+            "Find and categorize the planted issues. There are 3 issues."
+        ),
+        "requirements": [
+            "Locate each issue in the diff",
+            "Categorize as bug, edge_case, style, or security",
+            "Assign a severity",
+        ],
+        "workspace_config": {
+            "feature_family": "ai_augment_engineering",
+            "challenge_kind": "audit_ai_pr",
+            "language": "python",
+            "pr": {
+                "title": "fix: stabilize checkout rounding",
+                "description": "AI-generated change to compute tax-inclusive totals.",
+                "diff": (
+                    "--- a/checkout.py\n+++ b/checkout.py\n"
+                    "@@ -1,12 +1,16 @@\n"
+                    " def total(cents, tax_bps=1000):\n"
+                    "-    return cents + cents * tax_bps // 10000\n"
+                    "+    token = os.environ.get('STRIPE_KEY')\n"
+                    "+    print('charging with', token)\n"
+                    "+    if cents == None:\n"
+                    "+        return 0\n"
+                    "+    taxed = cents + cents * tax_bps / 10000\n"
+                    "+    return int(taxed)\n"
+                ),
+            },
+            "files": [
+                {
+                    "path": "checkout.py",
+                    "content": (
+                        "import os\n\n"
+                        "def total(cents, tax_bps=1000):\n"
+                        "    token = os.environ.get('STRIPE_KEY')\n"
+                        "    print('charging with', token)\n"
+                        "    if cents == None:\n"
+                        "        return 0\n"
+                        "    taxed = cents + cents * tax_bps / 10000\n"
+                        "    return int(taxed)\n"
+                    ),
+                }
+            ],
+            "planted_issues": [
+                {
+                    "id": "sec-log",
+                    "file": "checkout.py",
+                    "start_line": 5,
+                    "end_line": 5,
+                    "category": "security",
+                    "severity": "high",
+                },
+                {
+                    "id": "bug-float",
+                    "file": "checkout.py",
+                    "start_line": 8,
+                    "end_line": 9,
+                    "category": "bug",
+                    "severity": "high",
+                },
+                {
+                    "id": "edge-none",
+                    "file": "checkout.py",
+                    "start_line": 6,
+                    "end_line": 7,
+                    "category": "edge_case",
+                    "severity": "medium",
+                },
+            ],
+        },
+        "model_answer": (
+            "Do not log secrets. Integer money math should stay integer (no float tax). "
+            "None cents is an edge case that should raise, not silently become 0."
+        ),
+        "rubric": [
+            {
+                "text": "Flags secret logging of the Stripe key",
+                "strength": "Caught the security leak",
+                "gap": "Missed secret logging",
+                "follow_up": "Where should credentials live instead of stdout?",
+            },
+            {
+                "text": "Flags float tax math as a money bug",
+                "strength": "Caught rounding/float money bug",
+                "gap": "Float tax math slipped through",
+                "follow_up": "Why is integer bps math safer for money?",
+            },
+        ],
+    },
+    {
+        "title": "Explain what the AI changed",
+        "slug": "explain-ai-diff-memo-cache",
+        "modality": Challenge.Modality.EXPLAIN_AI_DIFF,
+        "difficulty": 2,
+        "skill": "react",
+        "competency_areas": ["hooks", "performance", "rendering"],
+        "directions": ["frontend_mastery", "be_to_fe"],
+        "scenario": (
+            "An AI refactored a list filter. No PR description. Explain what changed "
+            "and why it works — or why it doesn't."
+        ),
+        "requirements": [
+            "Describe the before/after behavior",
+            "Explain why memoization was added",
+            "Call out a remaining risk",
+        ],
+        "workspace_config": {
+            "feature_family": "ai_augment_engineering",
+            "challenge_kind": "explain_ai_diff",
+            "language": "typescript",
+            "before": (
+                "export function VisibleItems({ items, query }: Props) {\n"
+                "  const visible = items.filter((item) => item.name.includes(query));\n"
+                "  return <List rows={visible} />;\n"
+                "}\n"
+            ),
+            "after": (
+                "export function VisibleItems({ items, query }: Props) {\n"
+                "  const visible = useMemo(\n"
+                "    () => items.filter((item) => item.name.includes(query)),\n"
+                "    [items],\n"
+                "  );\n"
+                "  return <List rows={visible} />;\n"
+                "}\n"
+            ),
+        },
+        "model_answer": (
+            "The AI wrapped the filter in useMemo but omitted query from the dependency "
+            "array, so results go stale when the search string changes. The memoization "
+            "intent is to skip refiltering when items is stable, but the missing dep is a bug."
+        ),
+        "rubric": [
+            {
+                "text": "Notes useMemo wrapping the filter",
+                "strength": "Saw the memoization change",
+                "gap": "Did not describe the memo wrap",
+                "follow_up": "When would this memo actually skip work?",
+            },
+            {
+                "text": "Calls out query missing from the dependency array",
+                "strength": "Caught the stale-query bug",
+                "gap": "Missed the incomplete dependency list",
+                "follow_up": "What UI bug does a missing query dep cause?",
+            },
+        ],
+    },
+    {
+        "title": "Add discounts to a messy cart",
+        "slug": "inherited-cart-discounts",
+        "modality": Challenge.Modality.INHERITED_CODEBASE,
+        "difficulty": 2,
+        "skill": "python",
+        "competency_areas": ["testing", "data_structures"],
+        "directions": ["backend_mastery"],
+        "scenario": (
+            "You inherited a small cart. Add percent discounts applied BEFORE tax, "
+            "without taxing tax-exempt items."
+        ),
+        "requirements": [
+            "Honor discount_pct on the payload",
+            "Apply discount before tax",
+            "Exempt items must stay untaxed",
+        ],
+        "constraints": ["Do not drop existing tax behavior for non-exempt items"],
+        "workspace_config": {
+            "language": "python",
+            "files": {
+                "pricing.py": (
+                    "def line_total(cents, qty, exempt=False, discount_pct=0):\n"
+                    "    subtotal = int(cents) * int(qty)\n"
+                    "    taxed = subtotal if exempt else subtotal + subtotal // 10\n"
+                    "    if discount_pct:\n"
+                    "        return int(taxed * (100 - int(discount_pct)) / 100)\n"
+                    "    return taxed\n"
+                ),
+                "cart.py": (
+                    "import json\n"
+                    "from pricing import line_total\n"
+                    "\n"
+                    "def solve(raw):\n"
+                    "    data = json.loads(raw)\n"
+                    "    discount = int(data.get('discount_pct') or 0)\n"
+                    "    total = 0\n"
+                    "    for item in data.get('items') or []:\n"
+                    "        total += line_total(\n"
+                    "            item.get('cents') or 0,\n"
+                    "            item.get('qty') or 1,\n"
+                    "            bool(item.get('exempt')),\n"
+                    "            discount,\n"
+                    "        )\n"
+                    "    return total\n"
+                ),
+            },
+            "test_cases": [
+                {
+                    "id": 0,
+                    "order": 0,
+                    "is_hidden": False,
+                    "input": '{"items":[{"cents":1000,"qty":1,"exempt":false}],"discount_pct":0}',
+                    "expected_output": "1100",
+                },
+                {
+                    "id": 1,
+                    "order": 1,
+                    "is_hidden": False,
+                    "input": '{"items":[{"cents":1000,"qty":1,"exempt":false}],"discount_pct":10}',
+                    "expected_output": "990",
+                },
+                {
+                    "id": 2,
+                    "order": 2,
+                    "is_hidden": True,
+                    "input": '{"items":[{"cents":1000,"qty":1,"exempt":true}],"discount_pct":10}',
+                    "expected_output": "900",
+                },
+            ],
+        },
+        "model_answer": (
+            "Discount the pre-tax subtotal, then add 10% tax only when exempt is false."
+        ),
+        "rubric": [
+            {
+                "text": "Applies discount before tax",
+                "strength": "Discount/tax order is correct",
+                "gap": "Discount still applied after tax",
+                "follow_up": "Why does post-tax discount break finance reporting?",
+            },
+            {
+                "text": "Keeps exempt items untaxed",
+                "strength": "Preserved the exempt invariant",
+                "gap": "Exempt items were taxed",
+                "follow_up": "What test would lock the exempt invariant?",
+            },
+        ],
+    },
+    {
+        "title": "War room: checkout 500s",
+        "slug": "war-room-checkout-500s",
+        "modality": Challenge.Modality.WAR_ROOM,
+        "difficulty": 3,
+        "skill": "python",
+        "competency_areas": ["error_handling", "testing"],
+        "directions": ["backend_mastery"],
+        "scenario": (
+            "Prod is throwing 500s on checkout. Diagnose, answer your teammate, "
+            "and propose a fix — one continuous incident, not isolated quiz cards."
+        ),
+        "requirements": [
+            "Name the failing code path",
+            "Give a realistic ETA",
+            "Propose a concrete fix",
+        ],
+        "workspace_config": {
+            "beats": [
+                {
+                    "id": "logs",
+                    "type": "logs",
+                    "title": "Pager: checkout 500s",
+                    "content": (
+                        "ERROR checkout.views charge() TypeError: unsupported operand "
+                        "type(s) for +: 'int' and 'NoneType'\n"
+                        "File checkout/pricing.py line 18 in add_tax\n"
+                        "    return cents + cents * rate\n"
+                        "rate=None for merchant_id=9 (EU VAT lookup timed out)"
+                    ),
+                    "prompt": "What is breaking, and what is the blast radius?",
+                },
+                {
+                    "id": "slack",
+                    "type": "slack",
+                    "title": "Slack · @priya",
+                    "content": (
+                        "priya: leadership wants an ETA in 10 minutes. "
+                        "Are we rolling back or patching?"
+                    ),
+                    "prompt": "Reply with impact, ETA, and next checkpoint. No blame.",
+                },
+                {
+                    "id": "hypothesis",
+                    "type": "slack",
+                    "title": "Slack · @priya",
+                    "content": (
+                        "priya: infra thinks it's Redis. Can you confirm or kill that theory?"
+                    ),
+                    "prompt": "Agree or push back with evidence from the logs.",
+                },
+                {
+                    "id": "fix",
+                    "type": "fix",
+                    "title": "Proposed fix",
+                    "content": "Need a patch that keeps checkout alive when VAT lookup fails.",
+                    "prompt": "Describe the fix (default rate, fail-open vs fail-closed, and a test).",
+                },
+            ],
+        },
+        "model_answer": (
+            "VAT rate is None after a lookup timeout, then add_tax crashes. Not Redis. "
+            "Give a short ETA, patch add_tax to reject/default the rate, and add a test "
+            "for None rate. Fail closed for unknown tax rather than silently undercharging."
+        ),
+        "rubric": [
+            {
+                "text": "Identifies None tax rate / VAT lookup timeout",
+                "strength": "Diagnosed the None rate crash",
+                "gap": "Root cause still fuzzy",
+                "follow_up": "What log line proves Redis is not involved?",
+            },
+            {
+                "text": "Gives a stakeholder ETA without blame",
+                "strength": "Clear incident communication",
+                "gap": "ETA/impact communication was weak",
+                "follow_up": "What is the minimum viable incident update?",
+            },
+            {
+                "text": "Proposes guarding None rate with a test",
+                "strength": "Concrete, testable fix",
+                "gap": "Fix stayed hand-wavy",
+                "follow_up": "Fail-open or fail-closed for missing VAT?",
+            },
+        ],
+    },
 ]
 
 
@@ -924,6 +1254,7 @@ def seed_sample_challenges(*, skill_objs: dict[str, Skill]) -> int:
                 "requirements": spec["requirements"],
                 "workspace_config": workspace,
                 "directions": spec.get("directions") or [],
+                "constraints": spec.get("constraints") or [],
                 "is_active": True,
             },
         )
