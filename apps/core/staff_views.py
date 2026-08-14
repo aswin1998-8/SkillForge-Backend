@@ -104,6 +104,18 @@ class StaffWaitlistInviteView(APIView):
         )
 
 
+class StaffWaitlistDetailView(APIView):
+    permission_classes = [IsAuthenticated, IsStaffUser]
+
+    def delete(self, request: Request, pk: int) -> Response:
+        signup = WaitlistSignup.objects.filter(pk=pk).first()
+        if signup is None:
+            raise NotFound("Waitlist signup not found.")
+        email = signup.email
+        signup.delete()
+        return success_response({"id": pk, "email": email}, message="Waitlist signup deleted.")
+
+
 class StaffUserListView(APIView):
     permission_classes = [IsAuthenticated, IsStaffUser]
 

@@ -3,6 +3,7 @@ from django.urls import path
 from apps.core.staff_views import (
     StaffUserDetailView,
     StaffUserListView,
+    StaffWaitlistDetailView,
     StaffWaitlistInviteView,
     StaffWaitlistListView,
 )
@@ -16,6 +17,11 @@ urlpatterns = [
         "staff/waitlist/<int:pk>/invite/",
         StaffWaitlistInviteView.as_view(),
         name="staff-waitlist-invite",
+    ),
+    path(
+        "staff/waitlist/<int:pk>/",
+        StaffWaitlistDetailView.as_view(),
+        name="staff-waitlist-detail",
     ),
     path("staff/users/", StaffUserListView.as_view(), name="staff-users"),
     path("staff/users/<int:pk>/", StaffUserDetailView.as_view(), name="staff-user-detail"),

@@ -82,6 +82,18 @@ def test_staff_waitlist_lists_rows(api: APIClient, staff_user: User, normal_user
 
 
 @pytest.mark.django_db
+def test_staff_can_delete_waitlist_signup(api: APIClient, staff_user: User, normal_user: User) -> None:
+    signup = WaitlistSignup.objects.create(email="gone@skillforge.test")
+    api.force_authenticate(user=normal_user)
+    assert api.delete(f"/api/v1/staff/waitlist/{signup.id}/").status_code == 403
+
+    api.force_authenticate(user=staff_user)
+    response = api.delete(f"/api/v1/staff/waitlist/{signup.id}/")
+    assert response.status_code == 200
+    assert not WaitlistSignup.objects.filter(pk=signup.id).exists()
+
+
+@pytest.mark.django_db
 def test_staff_send_invite_emails_and_resend_invalidates(
     api: APIClient, staff_user: User
 ) -> None:
