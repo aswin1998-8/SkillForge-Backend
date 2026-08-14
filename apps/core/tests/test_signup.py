@@ -11,6 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.users.models import EmailVerificationToken, Profile, User
+from conftest import make_invite
 
 
 @pytest.fixture
@@ -19,13 +20,16 @@ def api() -> APIClient:
 
 
 def _register_payload(**overrides):
+    email = overrides.get("email", "new@skillforge.test")
     data = {
-        "email": "new@skillforge.test",
+        "email": email,
         "password": "SecurePass123!",
         "first_name": "Ada",
         "last_name": "Lovelace",
     }
     data.update(overrides)
+    if not data.get("invite_token"):
+        data["invite_token"] = make_invite(str(data["email"]))
     return data
 
 
@@ -146,6 +150,45 @@ def test_resend_verification_authenticated(api: APIClient) -> None:
 
 
 @pytest.mark.django_db
+def test_google_auth_new_user_requires_invite(api: APIClient, settings) -> None:
+    settings.GOOGLE_CLIENT_ID = "test-google-client"
+    payload = {
+        "email": "noinvite@skillforge.test",
+        "email_verified": True,
+        "sub": "google-sub-new-no-invite",
+        "given_name": "No",
+        "family_name": "Invite",
+    }
+    with patch(
+        "apps.users.services.id_token.verify_oauth2_token",
+        return_value=payload,
+    ):
+        response = api.post(
+            "/api/v1/auth/google/",
+            {"credential": "fake-jwt"},
+            format="json",
+        )
+    assert response.status_code == 400
+    assert not User.objects.filter(email="noinvite@skillforge.test").exists()
+
+
+@pytest.mark.django_db
+def test_register_requires_invite_token(api: APIClient) -> None:
+    response = api.post(
+        "/api/v1/auth/register/",
+        {
+            "email": "new@skillforge.test",
+            "password": "SecurePass123!",
+            "first_name": "Ada",
+            "last_name": "Lovelace",
+        },
+        format="json",
+    )
+    assert response.status_code == 400
+    assert "invite_token" in response.data["error"]["details"]
+
+
+@pytest.mark.django_db
 def test_google_auth_new_user(api: APIClient, settings) -> None:
     settings.GOOGLE_CLIENT_ID = "test-google-client"
     payload = {
@@ -161,11 +204,12 @@ def test_google_auth_new_user(api: APIClient, settings) -> None:
     ):
         response = api.post(
             "/api/v1/auth/google/",
-            {"credential": "fake-jwt"},
+            {
+                "credential": "fake-jwt",
+                "invite_token": make_invite("google@skillforge.test"),
+            },
             format="json",
         )
-    assert response.status_code == 200
-    assert response.data["data"]["email"] == "google@skillforge.test"
     assert response.data["data"]["email_verified"] is True
     assert "sf_access" in response.cookies
     user = User.objects.get(email="google@skillforge.test")

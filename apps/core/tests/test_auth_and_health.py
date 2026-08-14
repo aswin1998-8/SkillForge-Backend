@@ -8,6 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.roles.models import Role
 from apps.users.models import User
+from conftest import make_invite
 
 
 @pytest.fixture
@@ -36,6 +37,7 @@ def test_register_login_me_logout(api: APIClient) -> None:
             "password": "SecurePass123!",
             "first_name": "Ada",
             "last_name": "Lovelace",
+            "invite_token": make_invite("new@skillforge.test"),
         },
         format="json",
     )

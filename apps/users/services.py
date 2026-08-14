@@ -41,10 +41,20 @@ def issue_verification_email(user: User) -> EmailVerificationToken:
 
 
 @transaction.atomic
-def register_user(*, email: str, password: str, first_name: str = "", last_name: str = "") -> User:
+def register_user(
+    *,
+    email: str,
+    password: str,
+    first_name: str = "",
+    last_name: str = "",
+    invite_token: str = "",
+) -> User:
+    from apps.core.invites import require_invite_for_new_user
+
     email = email.lower().strip()
     if User.objects.filter(email=email).exists():
         raise ValidationError({"email": "A user with this email already exists."})
+    require_invite_for_new_user(email=email, invite_token=invite_token)
     user = User.objects.create_user(
         email=email,
         password=password,
@@ -65,7 +75,12 @@ def login_user(*, email: str, password: str) -> User:
 
 
 @transaction.atomic
-def login_or_register_google(*, credential: str, client_id: str) -> User:
+def login_or_register_google(
+    *,
+    credential: str,
+    client_id: str,
+    invite_token: str = "",
+) -> User:
     if not client_id:
         raise ValidationError({"google": "Google OAuth is not configured."})
     try:
@@ -88,6 +103,9 @@ def login_or_register_google(*, credential: str, client_id: str) -> User:
     if user is None:
         user = User.objects.filter(email=email).first()
         if user is None:
+            from apps.core.invites import require_invite_for_new_user
+
+            require_invite_for_new_user(email=email, invite_token=invite_token)
             user = User.objects.create_user(
                 email=email,
                 password=None,

@@ -13,6 +13,7 @@ from apps.users.cookies import clear_jwt_cookies, set_jwt_cookies, tokens_for_us
 from apps.users.serializers import (
     ForgotPasswordSerializer,
     GoogleAuthSerializer,
+    InvitePreviewSerializer,
     LoginSerializer,
     ProfileSerializer,
     RegisterSerializer,
@@ -55,6 +56,29 @@ class ForgotPasswordRateThrottle(AnonRateThrottle):
 
 class ResetPasswordRateThrottle(AnonRateThrottle):
     scope = "reset_password"
+
+
+class InvitePreviewRateThrottle(AnonRateThrottle):
+    scope = "invite_preview"
+
+
+class InvitePreviewView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [InvitePreviewRateThrottle]
+
+    def get(self, request: Request) -> Response:
+        from apps.core.invites import preview_invite
+
+        serializer = InvitePreviewSerializer(data=request.query_params)
+        serializer.is_valid(raise_exception=True)
+        token_obj = preview_invite(serializer.validated_data["token"])
+        return success_response(
+            {
+                "email": token_obj.email,
+                "expires_at": token_obj.expires_at,
+            }
+        )
 
 
 class RegisterView(APIView):
@@ -100,6 +124,7 @@ class GoogleAuthView(APIView):
         user = login_or_register_google(
             credential=serializer.validated_data["credential"],
             client_id=settings.GOOGLE_CLIENT_ID,
+            invite_token=serializer.validated_data.get("invite_token") or "",
         )
         refresh = tokens_for_user(user)
         response = success_response(

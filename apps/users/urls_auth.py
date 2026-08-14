@@ -11,6 +11,7 @@ from apps.users.views import (
     ResendVerificationView,
     ResetPasswordView,
     VerifyEmailView,
+    InvitePreviewView,
 )
 
 urlpatterns = [
@@ -20,6 +21,7 @@ urlpatterns = [
     path("google/", GoogleAuthView.as_view(), name="auth-google"),
     path("refresh/", RefreshView.as_view(), name="auth-refresh"),
     path("me/", MeView.as_view(), name="auth-me"),
+    path("invite/", InvitePreviewView.as_view(), name="auth-invite-preview"),
     path("verify-email/", VerifyEmailView.as_view(), name="auth-verify-email"),
     path(
         "resend-verification/",

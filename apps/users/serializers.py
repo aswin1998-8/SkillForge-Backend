@@ -11,6 +11,7 @@ class RegisterSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
+    invite_token = serializers.CharField()
 
     def validate_first_name(self, value: str) -> str:
         value = value.strip()
@@ -48,9 +49,14 @@ class LoginSerializer(serializers.Serializer):
 
 class GoogleAuthSerializer(serializers.Serializer):
     credential = serializers.CharField()
+    invite_token = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class VerifyEmailSerializer(serializers.Serializer):
+    token = serializers.CharField()
+
+
+class InvitePreviewSerializer(serializers.Serializer):
     token = serializers.CharField()
 
 

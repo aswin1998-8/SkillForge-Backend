@@ -195,6 +195,8 @@ REST_FRAMEWORK = {
         "resend_verification": "3/min",
         "forgot_password": "5/min",
         "reset_password": "5/min",
+        "waitlist": "5/min",
+        "invite_preview": "20/min",
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
 }
