@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def send_invite_email(email: str, token: str) -> None:
     frontend = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     invite_url = f"{frontend}/signup?invite={token}"
-    subject = "You're invited to Honed"
+    subject = "Your Honed invite"
     message = (
         "Hi,\n\n"
         "You've been invited to join Honed. Create your account with this link:\n"

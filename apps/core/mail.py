@@ -25,20 +25,48 @@ def _from_header() -> str:
     return f"Honed <{raw}>"
 
 
+def _html_body(text: str) -> str:
+    escaped = (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    paragraphs = "".join(
+        f"<p style=\"margin:0 0 12px;line-height:1.5\">{p.replace(chr(10), '<br>')}</p>"
+        for p in escaped.split("\n\n")
+    )
+    return (
+        "<!DOCTYPE html><html><body style=\"font-family:system-ui,sans-serif;"
+        "font-size:16px;color:#111;max-width:560px\">"
+        f"{paragraphs}"
+        "<p style=\"margin-top:24px;font-size:12px;color:#666\">"
+        "Honed · You received this because you joined the waitlist."
+        "</p></body></html>"
+    )
+
+
 def _send_via_resend(*, to: str, subject: str, text: str) -> None:
     api_key = getattr(settings, "RESEND_API_KEY", "") or ""
+    payload = {
+        "from": _from_header(),
+        "to": [to],
+        "subject": subject,
+        "text": text,
+        "html": _html_body(text),
+        "headers": {
+            "List-Unsubscribe": f"<mailto:{settings.DEFAULT_FROM_EMAIL}>",
+        },
+    }
+    reply_to = (getattr(settings, "EMAIL_REPLY_TO", "") or "").strip()
+    if reply_to:
+        payload["reply_to"] = [reply_to]
     response = requests.post(
         "https://api.resend.com/emails",
         headers={
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         },
-        json={
-            "from": _from_header(),
-            "to": [to],
-            "subject": subject,
-            "text": text,
-        },
+        json=payload,
         timeout=20,
     )
     if response.status_code >= 400:
