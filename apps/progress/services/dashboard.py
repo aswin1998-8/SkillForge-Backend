@@ -20,6 +20,7 @@ from apps.gaps.services import (
 )
 from apps.sessions.models import LearningSession
 from apps.sessions.serializers import LearningSessionSerializer
+from apps.sessions.services import session_scores
 from apps.users.models import User
 
 
@@ -29,7 +30,8 @@ def build_dashboard(user: User) -> dict[str, Any]:
         status=UserSkillGap.Status.CLOSED
     )
     closed_count = closed_gaps_qs.count()
-    recent_sessions = LearningSession.objects.filter(user=user)[:5]
+    recent_sessions = list(LearningSession.objects.filter(user=user)[:5])
+    session_score_map = session_scores(recent_sessions)
     active_diagnostic = (
         DiagnosticSession.objects.filter(
             user=user,
@@ -115,7 +117,9 @@ def build_dashboard(user: User) -> dict[str, Any]:
         "open_gaps": open_gaps,
         "recently_closed_gaps": recently_closed_gaps,
         "today_challenge": DailyChallengeSerializer(daily).data if daily else None,
-        "recent_sessions": LearningSessionSerializer(recent_sessions, many=True).data,
+        "recent_sessions": LearningSessionSerializer(
+            recent_sessions, many=True, context={"scores": session_score_map}
+        ).data,
         "onboarding_completed": onboarding_completed,
         "active_diagnostic_session_id": active_diagnostic.id if active_diagnostic else None,
         "diagnostic_completed": completed_diagnostic is not None,

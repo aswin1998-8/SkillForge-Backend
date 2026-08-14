@@ -7,15 +7,18 @@ from rest_framework.views import APIView
 
 from apps.core.responses import success_response
 from apps.sessions.serializers import LearningSessionSerializer
-from apps.sessions.services import get_session_for_user, list_sessions
+from apps.sessions.services import get_session_for_user, list_sessions, session_scores
 
 
 class SessionListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request: Request) -> Response:
-        sessions = list_sessions(request.user)
-        return success_response(LearningSessionSerializer(sessions, many=True).data)
+        sessions = list(list_sessions(request.user))
+        scores = session_scores(sessions)
+        return success_response(
+            LearningSessionSerializer(sessions, many=True, context={"scores": scores}).data
+        )
 
 
 class SessionDetailView(APIView):
