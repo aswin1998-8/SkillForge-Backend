@@ -111,6 +111,23 @@ def test_staff_send_invite_emails_and_resend_invalidates(
 
 
 @pytest.mark.django_db
+def test_staff_invite_smtp_failure_does_not_mark_invited(
+    api: APIClient, staff_user: User
+) -> None:
+    signup = WaitlistSignup.objects.create(email="fail@skillforge.test")
+    api.force_authenticate(user=staff_user)
+    with patch(
+        "apps.core.tasks.send_mail",
+        side_effect=OSError("smtp down"),
+    ):
+        response = api.post(f"/api/v1/staff/waitlist/{signup.id}/invite/")
+    assert response.status_code == 400
+    signup.refresh_from_db()
+    assert signup.invited is False
+    assert not InviteToken.objects.filter(email="fail@skillforge.test").exists()
+
+
+@pytest.mark.django_db
 def test_invite_consumed_once_and_wrong_email_rejected(api: APIClient) -> None:
     token = make_invite("once@skillforge.test")
     first = api.post(

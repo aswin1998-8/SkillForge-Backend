@@ -1,18 +1,17 @@
-"""Waitlist invite email tasks."""
+"""Waitlist invite email."""
 
 from __future__ import annotations
 
 import logging
 
-from celery import shared_task
 from django.conf import settings
 from django.core.mail import send_mail
+from rest_framework.exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def send_invite_email_task(self, email: str, token: str) -> None:
+def send_invite_email(email: str, token: str) -> None:
     frontend = getattr(settings, "FRONTEND_URL", "http://localhost:3000").rstrip("/")
     invite_url = f"{frontend}/signup?invite={token}"
     subject = "You're invited to Honed"
@@ -23,22 +22,26 @@ def send_invite_email_task(self, email: str, token: str) -> None:
         "This link expires in 7 days and can be used once. "
         "Sign up with the same email this invite was sent to.\n"
     )
-    try:
-        send_mail(
-            subject,
-            message,
-            settings.DEFAULT_FROM_EMAIL,
-            [email],
-            fail_silently=False,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Failed to send invite email to %s", email)
-        raise self.retry(exc=exc) from exc
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [email],
+        fail_silently=False,
+    )
 
 
 def dispatch_invite_email(email: str, token: str) -> None:
+    """Send immediately in-process. Celery/Redis is not required on Render."""
     try:
-        send_invite_email_task.delay(email, token)
-    except Exception:  # noqa: BLE001
-        logger.warning("Celery unavailable; sending invite email synchronously")
-        send_invite_email_task(email, token)
+        send_invite_email(email, token)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to send invite email to %s", email)
+        raise ValidationError(
+            {
+                "email": (
+                    "Could not send the invite email. Set EMAIL_HOST (and SMTP "
+                    "credentials) on the server, or EMAIL_BACKEND=smtp."
+                )
+            }
+        ) from exc
